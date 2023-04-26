@@ -1,0 +1,5 @@
+neo4j==4.3.9
+numpy==1.22.4
+pandas==1.4.3
+
+pytest==6.2.5
