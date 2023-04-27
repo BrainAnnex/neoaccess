@@ -299,7 +299,10 @@ def test_get_record_by_primary_key(db):
 
 
 def test_exists_by_key(db):
-    db.empty_dbase(drop_indexes=True, drop_constraints=True)
+    db.empty_dbase()
+
+    assert not db.exists_by_key("person", key_name="SSN", key_value=123)    # Cannot exist, because we just emptied the database
+
     db.create_node("person", {'SSN': 123, 'name': 'Valerie', 'gender': 'F'})
     db.create_node("person", {'SSN': 456, 'name': 'Therese', 'gender': 'F'})
 
@@ -310,6 +313,23 @@ def test_exists_by_key(db):
     assert not db.exists_by_key("person", key_name="SSN", key_value=5555)
     assert not db.exists_by_key("person", key_name="name", key_value='Joe')
     assert not db.exists_by_key("non_existent_label", key_name="SSN", key_value=123)
+
+
+
+def test_exists_by_internal_id(db):
+    db.empty_dbase()
+
+    assert not db.exists_by_internal_id(internal_id = 8888)     # Cannot exist, because we just emptied the database
+
+    Valerie_ID = db.create_node("person", {'SSN': 123, 'name': 'Valerie', 'gender': 'F'})
+    assert db.exists_by_internal_id(Valerie_ID)
+    assert not db.exists_by_internal_id(Valerie_ID+1)
+
+
+    Therese_ID = db.create_node("person", {'SSN': 456, 'name': 'Therese', 'gender': 'F'})
+    assert db.exists_by_internal_id(Therese_ID)
+
+    assert not db.exists_by_internal_id(Valerie_ID + Therese_ID + 1)    # Using an internal ID that could not possibly exist
 
 
 

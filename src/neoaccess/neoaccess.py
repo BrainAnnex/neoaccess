@@ -396,11 +396,11 @@ class NeoAccess:
                     neo4j_properties = dict(item.items())   # EXAMPLE: {'gender': 'M', 'age': 99}
 
                     if isinstance(item, neo4j.graph.Node):
-                        neo4j_properties["internal_id"] = item.id                  # Example: 227
+                        neo4j_properties["internal_id"] = item.id               # Example: 227
                         neo4j_properties["neo4j_labels"] = list(item.labels)    # Example: ['person', 'client']
 
                     elif isinstance(item, neo4j.graph.Relationship):
-                        neo4j_properties["internal_id"] = item.id                  # Example: 227
+                        neo4j_properties["internal_id"] = item.id               # Example: 227
                         neo4j_properties["neo4j_start_node"] = item.start_node  # A neo4j.graph.Node object with "id", "labels" and "properties"
                         neo4j_properties["neo4j_end_node"] = item.end_node      # A neo4j.graph.Node object with "id", "labels" and "properties"
                                                                                 #   Example: <Node id=118 labels=frozenset({'car'}) properties={'color': 'white'}>
@@ -560,11 +560,12 @@ class NeoAccess:
     def exists_by_key(self, labels: str, key_name: str, key_value) -> bool:
         """
         Return True if a node with the given labels and key_name/key_value exists, or False otherwise
-
+        TODO: test for multiple labels
         :param labels:
         :param key_name:
         :param key_value:
-        :return:
+        :return:            True if a node with the given labels and key_name/key_value exists,
+                                or False otherwise
         """
         record = self.get_record_by_primary_key(labels, key_name, key_value)
 
@@ -575,12 +576,12 @@ class NeoAccess:
 
 
 
-    def exists_by_internal_id(self, internal_id) -> bool:         # TODO: test
+    def exists_by_internal_id(self, internal_id) -> bool:
         """
         Return True if a node with the given internal Neo4j exists, or False otherwise
 
-        :param internal_id:
-        :return:        True if a node with the given internal Neo4j exists, or False otherwise
+        :param internal_id: An integer with a node's internal database ID
+        :return:            True if a node with the given internal Neo4j exists, or False otherwise
         """
         q = f'''
         MATCH (n) 
