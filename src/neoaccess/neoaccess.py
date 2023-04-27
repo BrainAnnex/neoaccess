@@ -12,12 +12,12 @@ from typing import Union, List
 
 class NeoAccess:
     """
-    VERSION 4.0.3    (for Neo 4.x database versions)
+    IMPORTANT : for versions 4.x of the Neo4j database
 
     High-level class to interface with the Neo4j graph database from Python.
 
-    Mostly tested on version 4.3 of Neo4j Community version, but should work with other 4.x versions, too.
-    NOT tested on any other major version of Neo4j; in particular, not tested with version 5
+    Mostly tested on versions 4.3 and 4.4 of Neo4j Community version, but should work with other 4.x versions, too.
+    NOT tested on any other major version of Neo4j; in particular, NOT tested with version 5
 
     Conceptually, there are two parts to NeoAccess:
         1) A thin wrapper around the Neo4j python connectivity library "Neo4j Python Driver"
@@ -2996,3 +2996,8 @@ class NeoAccess:
         indent_spaces = level*4
         indent_str = " " * indent_spaces        # Repeat a blank character the specified number of times
         return indent_str
+
+
+
+    def debug(self) -> str:         # TODO: to remove; just for debugging
+        return "GOOD"
