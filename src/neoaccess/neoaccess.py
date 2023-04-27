@@ -204,7 +204,8 @@ class NeoAccess:
 
     def assert_valid_internal_id(self, internal_id: int) -> None:
         """
-        Raise an Exception if the argument is not a valid Neo4j ID
+        Raise an Exception if the argument is not a valid database internal ID
+
         :param internal_id: Alleged Neo4j internal database ID
         :return:            None
         """
@@ -346,9 +347,9 @@ class NeoAccess:
                         Each item in the lists is a dictionary, with details that will depend on which Graph Data Types
                                     were returned in the Cypher query.
                                     EXAMPLE of individual items - for a returned NODE
-                                        {'gender': 'M', 'age': 20, 'neo4j_id': 123, 'neo4j_labels': ['patient']}
+                                        {'gender': 'M', 'age': 20, 'internal_id': 123, 'neo4j_labels': ['patient']}
                                     EXAMPLE of individual items - for a returned RELATIONSHIP
-                                        {'price': 7500, 'neo4j_id': 2,
+                                        {'price': 7500, 'internal_id': 2,
                                          'neo4j_start_node': <Node id=11 labels=frozenset() properties={}>,
                                          'neo4j_end_node': <Node id=14 labels=frozenset() properties={}>,
                                          'neo4j_type': 'bought_by'}]
@@ -395,11 +396,11 @@ class NeoAccess:
                     neo4j_properties = dict(item.items())   # EXAMPLE: {'gender': 'M', 'age': 99}
 
                     if isinstance(item, neo4j.graph.Node):
-                        neo4j_properties["neo4j_id"] = item.id                  # Example: 227
+                        neo4j_properties["internal_id"] = item.id                  # Example: 227
                         neo4j_properties["neo4j_labels"] = list(item.labels)    # Example: ['person', 'client']
 
                     elif isinstance(item, neo4j.graph.Relationship):
-                        neo4j_properties["neo4j_id"] = item.id                  # Example: 227
+                        neo4j_properties["internal_id"] = item.id                  # Example: 227
                         neo4j_properties["neo4j_start_node"] = item.start_node  # A neo4j.graph.Node object with "id", "labels" and "properties"
                         neo4j_properties["neo4j_end_node"] = item.end_node      # A neo4j.graph.Node object with "id", "labels" and "properties"
                                                                                 #   Example: <Node id=118 labels=frozenset({'car'}) properties={'color': 'white'}>
@@ -433,12 +434,12 @@ class NeoAccess:
         If the query returns any values, a list of them is also made available, as the value of the key 'returned_data'.
 
         Note: if the query creates nodes and one wishes to obtain their Neo4j internal ID's,
-              one can include Cypher code such as "RETURN id(n) AS neo4j_id" (where n is the dummy name of the newly-created node)
+              one can include Cypher code such as "RETURN id(n) AS internal_id" (where n is the dummy name of the newly-created node)
 
-        EXAMPLE:  result = update_query("CREATE(n :CITY {name: 'San Francisco'}) RETURN id(n) AS neo4j_id")
+        EXAMPLE:  result = update_query("CREATE(n :CITY {name: 'San Francisco'}) RETURN id(n) AS internal_id")
 
                   result will be {'nodes_created': 1, 'properties_set': 1, 'labels_added': 1,
-                                  'returned_data': [{'neo4j_id': 123}]
+                                  'returned_data': [{'internal_id': 123}]
                                  } , assuming 123 is the Neo4j internal ID of the newly-created node
 
         :param cypher:      Any Cypher query, but typically one that doesn't return anything
@@ -449,7 +450,7 @@ class NeoAccess:
                                 {'nodes_deleted': 3}    The query resulted in the deletion of 3 nodes
                                 {'properties_set': 2}   The query had the effect of setting 2 properties
                                 {'relationships_created': 1}    One new relationship got created
-                                {'returned_data': [{'neo4j_id': 123}]}  'returned_data' contains the results of the query,
+                                {'returned_data': [{'internal_id': 123}]}  'returned_data' contains the results of the query,
                                                                         if it returns anything, as a list of dictionaries
                                                                         - akin to the value returned by query()
                                 {'returned_data': []}  Gets returned by SET QUERIES with no return statement
@@ -534,7 +535,7 @@ class NeoAccess:
         :param labels:              A string or list/tuple of strings.  Use None if not to be included in search
         :param primary_key_name:    The name of the primary key by which to look the record up
         :param primary_key_value:   The desired value of the primary key
-        :param return_internal_id:       If True, an extra entry is present in the dictionary, with the key "neo4j_id"
+        :param return_internal_id:  If True, an extra entry is present in the dictionary, with the key "internal_id"
 
         :return:                    A dictionary, if a unique record was found; or None if not found
         """
@@ -629,7 +630,7 @@ class NeoAccess:
                                 OR a dictionary of data to identify a node, or set of nodes, as returned by match()
 
         :param return_internal_id:   Flag indicating whether to also include the Neo4j internal node ID in the returned data
-                                    (using "neo4j_id" as its key in the returned dictionary)
+                                    (using "internal_id" as its key in the returned dictionary)
         :param return_labels:   Flag indicating whether to also include the Neo4j label names in the returned data
                                     (using "neo4j_labels" as its key in the returned dictionary)
 
@@ -654,12 +655,12 @@ class NeoAccess:
                                              ]
                                     Note that ALL the attributes of each node are returned - and that they may vary across records.
                                     If the flag return_nodeid is set to True, then an extra key/value pair is included in the dictionaries,
-                                            of the form     "neo4j_id": some integer with the Neo4j internal node ID
+                                            of the form     "internal_id": some integer with the Neo4j internal node ID
                                     If the flag return_labels is set to True, then an extra key/value pair is included in the dictionaries,
                                             of the form     "neo4j_labels": [list of Neo4j label(s) attached to that node]
                                     EXAMPLE using both of the above flags:
-                                        [  {"neo4j_id": 145, "neo4j_labels": ["person", "client"], "gender": "M", "condition_id": 3},
-                                           {"neo4j_id": 222, "neo4j_labels": ["person"], "gender": "M", "location": "Berkeley"}
+                                        [  {"internal_id": 145, "neo4j_labels": ["person", "client"], "gender": "M", "condition_id": 3},
+                                           {"internal_id": 222, "neo4j_labels": ["person"], "gender": "M", "location": "Berkeley"}
                                         ]
         # TODO: provide an option to specify the desired fields
 
@@ -687,13 +688,13 @@ class NeoAccess:
         # Note: the flatten=True takes care of returning just the fields of the matched node "n", rather than dictionaries indexes by "n"
         if return_internal_id and return_labels:
             result_list = self.query_extended(cypher, data_binding, flatten=True)
-            # Note: query_extended() provides both 'neo4j_id' and 'neo4j_labels'
+            # Note: query_extended() provides both 'internal_id' and 'neo4j_labels'
         elif return_internal_id:     # but not return_labels
             result_list = self.query_extended(cypher, data_binding, flatten=True, fields_to_exclude=['neo4j_labels'])
         elif return_labels:     # but not return_internal_id
-            result_list = self.query_extended(cypher, data_binding, flatten=True, fields_to_exclude=['neo4j_id'])
+            result_list = self.query_extended(cypher, data_binding, flatten=True, fields_to_exclude=['internal_id'])
         else:
-            result_list = self.query_extended(cypher, data_binding, flatten=True, fields_to_exclude=['neo4j_id', 'neo4j_labels'])
+            result_list = self.query_extended(cypher, data_binding, flatten=True, fields_to_exclude=['internal_id', 'neo4j_labels'])
 
         # Deal with empty result lists
         if len(result_list) == 0:   # If no results were produced
@@ -859,9 +860,9 @@ class NeoAccess:
         """
         CypherUtils.assert_valid_internal_id(internal_id)
 
-        q = "MATCH (n) WHERE id(n)=$neo4j_id RETURN labels(n) AS all_labels"
+        q = "MATCH (n) WHERE id(n)=$internal_id RETURN labels(n) AS all_labels"
 
-        return self.query(q, data_binding={"neo4j_id": internal_id}, single_cell="all_labels")
+        return self.query(q, data_binding={"internal_id": internal_id}, single_cell="all_labels")
 
 
 
@@ -909,7 +910,7 @@ class NeoAccess:
         if len(result_list) != 1:
             raise Exception("NeoAccess.create_node(): failed to create the requested new node")
 
-        return result_list[0]['neo4j_id']           # Return the Neo4j internal ID of the node just created
+        return result_list[0]['internal_id']           # Return the Neo4j internal ID of the node just created
 
 
 
@@ -1382,7 +1383,7 @@ class NeoAccess:
         (n)-[:OWNS {since: $NODE1_par_1}]->(ex1)'''
 
         # Put all the parts of the Cypher query together
-        q = q_MATCH + "\n" + q_CREATE + "\n" + q_MERGE + "RETURN id(n) AS neo4j_id"
+        q = q_MATCH + "\n" + q_CREATE + "\n" + q_MERGE + "RETURN id(n) AS internal_id"
         #print("\n", q)
         #print("\n", data_binding)
         # EXAMPLE of q:
@@ -1390,13 +1391,13 @@ class NeoAccess:
         CREATE (n :`PERSON` {`name`: $par_1, `city`: $par_2})
         MERGE (n)<-[:EMPLOYS ]-(ex0)
         MERGE (n)-[:OWNS {`since`: $NODE1_par_1}]->(ex1)
-        RETURN id(n) AS neo4j_id
+        RETURN id(n) AS internal_id
         '''
         # EXAMPLE of data_binding : {'par_1': 'Julian', 'par_2': 'Berkeley', 'NODE0_VAL': 'IT', 'NODE1_VAL': 12345, 'NODE1_par_1': 2021}
 
         result = self.update_query(q, data_binding)
         #print("Result of update_query in create_node_with_relationships(): ", result)
-        # EXAMPLE: {'labels_added': 1, 'relationships_created': 2, 'nodes_created': 1, 'properties_set': 3, 'returned_data': [{'neo4j_id': 604}]}
+        # EXAMPLE: {'labels_added': 1, 'relationships_created': 2, 'nodes_created': 1, 'properties_set': 3, 'returned_data': [{'internal_id': 604}]}
 
 
         # Assert that the query produced the expected actions
@@ -1418,17 +1419,17 @@ class NeoAccess:
         if len(returned_data) == 0:
             raise Exception("Unable to extract internal ID of the newly-created node")
 
-        neo4j_id = returned_data[0].get("neo4j_id", None)
-        if neo4j_id is None:    # Note: neo4j_id might be zero
+        internal_id = returned_data[0].get("internal_id", None)
+        if internal_id is None:    # Note: internal_id might be zero
             raise Exception("Unable to extract internal ID of the newly-created node")
 
-        return neo4j_id    # Return the Neo4j ID of the new node
+        return internal_id    # Return the Neo4j ID of the new node
 
 
 
     #####################################################################################################
 
-    '''                                      ~   DELETE NODES   ~                                            '''
+    '''                                      ~   DELETE NODES   ~                                     '''
 
     def ________DELETE_NODES________(DIVIDER):
         pass        # Used to get a better structure view in IDEs
@@ -2999,5 +3000,5 @@ class NeoAccess:
 
 
 
-    def debug(self) -> str:         # TODO: to remove; just for debugging
-        return "GOOD"
+    def _debug_local(self) -> str:
+        return "local"
