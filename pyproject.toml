@@ -35,5 +35,5 @@ keywords = [
 Homepage = "https://brainannex.org/guide.php"
 "Home-page" = "https://brainannex.org/guide.php"
 "Bug Tracker" = "https://github.com/BrainAnnex/brain-annex/issues"
-Source = "https://github.com/BrainAnnex/brain-annex/tree/main/BrainAnnex/modules/neo_access"
+Source = "https://github.com/BrainAnnex/neoaccess"
 Documentation = "https://brainannex.org/guide.php"

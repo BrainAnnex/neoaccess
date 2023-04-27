@@ -286,19 +286,99 @@ def test_import_json_data(db):
                                                                 # Incorrectly-formatted JSON string. Expecting value: line 1 column 1 (char 0)
     with pytest.raises(Exception):
         assert db.import_json_dump('{"a": "this is good JSON, but not a list!"}')   # This ought to raise an Exception:
-                                                                                    # "The JSON string does not represent the expected list"
-    # TODO: extend
+                                                                                    # "The JSON string does not represent a list"
+    with pytest.raises(Exception):                      # This ought to raise an Exception:
+        assert db.import_json_dump('[1, 2, 3]')         # Item in list index 0 should be a dict, but instead it's of type <class 'int'>.  Item: 1
+
+    with pytest.raises(Exception):
+        assert db.import_json_dump('[{"bad_type":"node"}]')     # The dict in 0-th element lacks a "type" key
+
+    with pytest.raises(Exception):
+        assert db.import_json_dump('[{"type":"bad_value"}]')    # The dict in 0-th element doesn't have an acceptable value
+                                                                # for the "type" key
+
+    with pytest.raises(Exception):
+        assert db.import_json_dump('[{"type":"node"}]')         # Missing "id" key
+
+    with pytest.raises(Exception):
+        assert db.import_json_dump('[{"type":"node", "id": "NOT_INTEGER"}]')    # Non-integer id
+
+    with pytest.raises(Exception):
+        json = '[{"id":"4","type":"relationship","label":"is_friends_with","start":{"id":"123","labels":["User"]},"end":{"id":"456","labels":["Person", "Client"]}}]'
+        db.import_json_dump(json)                               # Trying to add a relationship between non-existing nodes
+
 
     # Now, test actual imports
 
-    # Completely clear the database
-    db.empty_dbase()
+    db.empty_dbase()    # Completely clear the database
 
+    # Import a 1st node
     json = '[{"type":"node","id":"123","labels":["User"],"properties":{"name":"Eve"}}]'
     details = db.import_json_dump(json)
     assert details == "Successful import of 1 node(s) and 0 relationship(s)"
     match = db.match(labels="User", properties={"name": "Eve"})
     retrieved_records = db.get_nodes(match)
     assert len(retrieved_records) == 1
+    match_all = db.match()
+    retrieved_records = db.get_nodes(match_all)
+    assert len(retrieved_records) == 1
 
-    # TODO: extend
+    # Import a 2nd node
+    json = '[{"type":"node","id":"456","labels":["Person", "Client"],"properties":{"name":"Adam"}}]'
+    details = db.import_json_dump(json)
+    assert details == "Successful import of 1 node(s) and 0 relationship(s)"
+    match = db.match(labels=["Person", "Client"], properties={"name": "Adam"})
+    retrieved_records = db.get_nodes(match)
+    assert len(retrieved_records) == 1
+    retrieved_records = db.get_nodes(match_all)
+    assert len(retrieved_records) == 2
+
+
+    # Starting with an empty database, re-import the 2 earlier nodes, but this time both at once
+    db.empty_dbase()    # Completely clear the database
+
+    json = '[{"type":"node","id":"123","labels":["User"],"properties":{"name":"Eve"}},\n' \
+           '{"type":"node","id":"456","labels":["Person", "Client"],"properties":{"name":"Adam"}}]'
+    details = db.import_json_dump(json)
+    assert details == "Successful import of 2 node(s) and 0 relationship(s)"
+
+    match = db.match(labels="User", properties={"name": "Eve"})
+    retrieved_records = db.get_nodes(match)
+    assert len(retrieved_records) == 1
+
+    match = db.match(labels=["Person", "Client"], properties={"name": "Adam"})
+    retrieved_records = db.get_nodes(match)
+    assert len(retrieved_records) == 1
+
+    retrieved_records = db.get_nodes(match_all)
+    assert len(retrieved_records) == 2
+
+
+    # Starting with an empty database, re-import the 2 earlier nodes, but this time both at once - and with a relationship between them
+    db.empty_dbase()    # Completely clear the database
+
+    json = '[{"type":"node","id":"123","labels":["User"],"properties":{"name":"Eve"}},\n' \
+           '{"type":"node","id":"456","labels":["Person", "Client"],"properties":{"name":"Adam"}},\n' \
+           '{"id":"7","type":"relationship","label":"is_friends_with","start":{"id":"123","labels":["User"]},"end":{"id":"456","labels":["Person", "Client"]}}]'
+    details = db.import_json_dump(json)
+    assert details == "Successful import of 2 node(s) and 1 relationship(s)"
+
+    match = db.match(labels="User", properties={"name": "Eve"})
+    retrieved_records = db.get_nodes(match, return_internal_id=True)
+    assert len(retrieved_records) == 1
+    id_eve = retrieved_records[0]["internal_id"]
+
+    match = db.match(labels=["Person", "Client"], properties={"name": "Adam"})
+    retrieved_records = db.get_nodes(match, return_internal_id=True)
+    assert len(retrieved_records) == 1
+    id_adam = retrieved_records[0]["internal_id"]
+
+    retrieved_records = db.get_nodes(match_all)
+    assert len(retrieved_records) == 2
+
+    q = '''
+        MATCH (eve :User {name: "Eve"}) - [:is_friends_with] -> (adam :Person:Client {name: "Adam"})
+        RETURN count(eve) AS num_eve, count(adam) AS num_adam, id(eve) AS id_eve, id(adam) AS id_adam
+        '''
+    result = db.query(q, single_row=True)
+    assert result == {'num_eve': 1, 'num_adam': 1, 'id_eve': id_eve, 'id_adam': id_adam}
