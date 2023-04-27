@@ -12,12 +12,12 @@ from typing import Union, List
 
 class NeoAccess:
     """
-    VERSION 4.0.3    (for Neo 4.x database versions)
+    IMPORTANT : for versions 4.x of the Neo4j database
 
     High-level class to interface with the Neo4j graph database from Python.
 
-    Mostly tested on version 4.3 of Neo4j Community version, but should work with other 4.x versions, too.
-    NOT tested on any other major version of Neo4j; in particular, not tested with version 5
+    Mostly tested on versions 4.3 and 4.4 of Neo4j Community version, but should work with other 4.x versions, too.
+    NOT tested on any other major version of Neo4j; in particular, NOT tested with version 5
 
     Conceptually, there are two parts to NeoAccess:
         1) A thin wrapper around the Neo4j python connectivity library "Neo4j Python Driver"
@@ -204,7 +204,8 @@ class NeoAccess:
 
     def assert_valid_internal_id(self, internal_id: int) -> None:
         """
-        Raise an Exception if the argument is not a valid Neo4j ID
+        Raise an Exception if the argument is not a valid database internal ID
+
         :param internal_id: Alleged Neo4j internal database ID
         :return:            None
         """
@@ -346,9 +347,9 @@ class NeoAccess:
                         Each item in the lists is a dictionary, with details that will depend on which Graph Data Types
                                     were returned in the Cypher query.
                                     EXAMPLE of individual items - for a returned NODE
-                                        {'gender': 'M', 'age': 20, 'neo4j_id': 123, 'neo4j_labels': ['patient']}
+                                        {'gender': 'M', 'age': 20, 'internal_id': 123, 'neo4j_labels': ['patient']}
                                     EXAMPLE of individual items - for a returned RELATIONSHIP
-                                        {'price': 7500, 'neo4j_id': 2,
+                                        {'price': 7500, 'internal_id': 2,
                                          'neo4j_start_node': <Node id=11 labels=frozenset() properties={}>,
                                          'neo4j_end_node': <Node id=14 labels=frozenset() properties={}>,
                                          'neo4j_type': 'bought_by'}]
@@ -395,11 +396,11 @@ class NeoAccess:
                     neo4j_properties = dict(item.items())   # EXAMPLE: {'gender': 'M', 'age': 99}
 
                     if isinstance(item, neo4j.graph.Node):
-                        neo4j_properties["neo4j_id"] = item.id                  # Example: 227
+                        neo4j_properties["internal_id"] = item.id               # Example: 227
                         neo4j_properties["neo4j_labels"] = list(item.labels)    # Example: ['person', 'client']
 
                     elif isinstance(item, neo4j.graph.Relationship):
-                        neo4j_properties["neo4j_id"] = item.id                  # Example: 227
+                        neo4j_properties["internal_id"] = item.id               # Example: 227
                         neo4j_properties["neo4j_start_node"] = item.start_node  # A neo4j.graph.Node object with "id", "labels" and "properties"
                         neo4j_properties["neo4j_end_node"] = item.end_node      # A neo4j.graph.Node object with "id", "labels" and "properties"
                                                                                 #   Example: <Node id=118 labels=frozenset({'car'}) properties={'color': 'white'}>
@@ -433,12 +434,12 @@ class NeoAccess:
         If the query returns any values, a list of them is also made available, as the value of the key 'returned_data'.
 
         Note: if the query creates nodes and one wishes to obtain their Neo4j internal ID's,
-              one can include Cypher code such as "RETURN id(n) AS neo4j_id" (where n is the dummy name of the newly-created node)
+              one can include Cypher code such as "RETURN id(n) AS internal_id" (where n is the dummy name of the newly-created node)
 
-        EXAMPLE:  result = update_query("CREATE(n :CITY {name: 'San Francisco'}) RETURN id(n) AS neo4j_id")
+        EXAMPLE:  result = update_query("CREATE(n :CITY {name: 'San Francisco'}) RETURN id(n) AS internal_id")
 
                   result will be {'nodes_created': 1, 'properties_set': 1, 'labels_added': 1,
-                                  'returned_data': [{'neo4j_id': 123}]
+                                  'returned_data': [{'internal_id': 123}]
                                  } , assuming 123 is the Neo4j internal ID of the newly-created node
 
         :param cypher:      Any Cypher query, but typically one that doesn't return anything
@@ -449,7 +450,7 @@ class NeoAccess:
                                 {'nodes_deleted': 3}    The query resulted in the deletion of 3 nodes
                                 {'properties_set': 2}   The query had the effect of setting 2 properties
                                 {'relationships_created': 1}    One new relationship got created
-                                {'returned_data': [{'neo4j_id': 123}]}  'returned_data' contains the results of the query,
+                                {'returned_data': [{'internal_id': 123}]}  'returned_data' contains the results of the query,
                                                                         if it returns anything, as a list of dictionaries
                                                                         - akin to the value returned by query()
                                 {'returned_data': []}  Gets returned by SET QUERIES with no return statement
@@ -534,7 +535,7 @@ class NeoAccess:
         :param labels:              A string or list/tuple of strings.  Use None if not to be included in search
         :param primary_key_name:    The name of the primary key by which to look the record up
         :param primary_key_value:   The desired value of the primary key
-        :param return_internal_id:       If True, an extra entry is present in the dictionary, with the key "neo4j_id"
+        :param return_internal_id:  If True, an extra entry is present in the dictionary, with the key "internal_id"
 
         :return:                    A dictionary, if a unique record was found; or None if not found
         """
@@ -559,11 +560,12 @@ class NeoAccess:
     def exists_by_key(self, labels: str, key_name: str, key_value) -> bool:
         """
         Return True if a node with the given labels and key_name/key_value exists, or False otherwise
-
+        TODO: test for multiple labels
         :param labels:
         :param key_name:
         :param key_value:
-        :return:
+        :return:            True if a node with the given labels and key_name/key_value exists,
+                                or False otherwise
         """
         record = self.get_record_by_primary_key(labels, key_name, key_value)
 
@@ -574,12 +576,12 @@ class NeoAccess:
 
 
 
-    def exists_by_internal_id(self, internal_id) -> bool:         # TODO: test
+    def exists_by_internal_id(self, internal_id) -> bool:
         """
         Return True if a node with the given internal Neo4j exists, or False otherwise
 
-        :param internal_id:
-        :return:        True if a node with the given internal Neo4j exists, or False otherwise
+        :param internal_id: An integer with a node's internal database ID
+        :return:            True if a node with the given internal Neo4j exists, or False otherwise
         """
         q = f'''
         MATCH (n) 
@@ -628,8 +630,8 @@ class NeoAccess:
         :param match:           EITHER an integer with a Neo4j node id,
                                 OR a dictionary of data to identify a node, or set of nodes, as returned by match()
 
-        :param return_internal_id:   Flag indicating whether to also include the Neo4j internal node ID in the returned data
-                                    (using "neo4j_id" as its key in the returned dictionary)
+        :param return_internal_id:  Flag indicating whether to also include the Neo4j internal node ID in the returned data
+                                    (using "internal_id" as its key in the returned dictionary)
         :param return_labels:   Flag indicating whether to also include the Neo4j label names in the returned data
                                     (using "neo4j_labels" as its key in the returned dictionary)
 
@@ -654,12 +656,12 @@ class NeoAccess:
                                              ]
                                     Note that ALL the attributes of each node are returned - and that they may vary across records.
                                     If the flag return_nodeid is set to True, then an extra key/value pair is included in the dictionaries,
-                                            of the form     "neo4j_id": some integer with the Neo4j internal node ID
+                                            of the form     "internal_id": some integer with the Neo4j internal node ID
                                     If the flag return_labels is set to True, then an extra key/value pair is included in the dictionaries,
                                             of the form     "neo4j_labels": [list of Neo4j label(s) attached to that node]
                                     EXAMPLE using both of the above flags:
-                                        [  {"neo4j_id": 145, "neo4j_labels": ["person", "client"], "gender": "M", "condition_id": 3},
-                                           {"neo4j_id": 222, "neo4j_labels": ["person"], "gender": "M", "location": "Berkeley"}
+                                        [  {"internal_id": 145, "neo4j_labels": ["person", "client"], "gender": "M", "condition_id": 3},
+                                           {"internal_id": 222, "neo4j_labels": ["person"], "gender": "M", "location": "Berkeley"}
                                         ]
         # TODO: provide an option to specify the desired fields
 
@@ -687,13 +689,13 @@ class NeoAccess:
         # Note: the flatten=True takes care of returning just the fields of the matched node "n", rather than dictionaries indexes by "n"
         if return_internal_id and return_labels:
             result_list = self.query_extended(cypher, data_binding, flatten=True)
-            # Note: query_extended() provides both 'neo4j_id' and 'neo4j_labels'
+            # Note: query_extended() provides both 'internal_id' and 'neo4j_labels'
         elif return_internal_id:     # but not return_labels
             result_list = self.query_extended(cypher, data_binding, flatten=True, fields_to_exclude=['neo4j_labels'])
         elif return_labels:     # but not return_internal_id
-            result_list = self.query_extended(cypher, data_binding, flatten=True, fields_to_exclude=['neo4j_id'])
+            result_list = self.query_extended(cypher, data_binding, flatten=True, fields_to_exclude=['internal_id'])
         else:
-            result_list = self.query_extended(cypher, data_binding, flatten=True, fields_to_exclude=['neo4j_id', 'neo4j_labels'])
+            result_list = self.query_extended(cypher, data_binding, flatten=True, fields_to_exclude=['internal_id', 'neo4j_labels'])
 
         # Deal with empty result lists
         if len(result_list) == 0:   # If no results were produced
@@ -859,9 +861,9 @@ class NeoAccess:
         """
         CypherUtils.assert_valid_internal_id(internal_id)
 
-        q = "MATCH (n) WHERE id(n)=$neo4j_id RETURN labels(n) AS all_labels"
+        q = "MATCH (n) WHERE id(n)=$internal_id RETURN labels(n) AS all_labels"
 
-        return self.query(q, data_binding={"neo4j_id": internal_id}, single_cell="all_labels")
+        return self.query(q, data_binding={"internal_id": internal_id}, single_cell="all_labels")
 
 
 
@@ -909,7 +911,7 @@ class NeoAccess:
         if len(result_list) != 1:
             raise Exception("NeoAccess.create_node(): failed to create the requested new node")
 
-        return result_list[0]['neo4j_id']           # Return the Neo4j internal ID of the node just created
+        return result_list[0]['internal_id']           # Return the Neo4j internal ID of the node just created
 
 
 
@@ -1382,7 +1384,7 @@ class NeoAccess:
         (n)-[:OWNS {since: $NODE1_par_1}]->(ex1)'''
 
         # Put all the parts of the Cypher query together
-        q = q_MATCH + "\n" + q_CREATE + "\n" + q_MERGE + "RETURN id(n) AS neo4j_id"
+        q = q_MATCH + "\n" + q_CREATE + "\n" + q_MERGE + "RETURN id(n) AS internal_id"
         #print("\n", q)
         #print("\n", data_binding)
         # EXAMPLE of q:
@@ -1390,13 +1392,13 @@ class NeoAccess:
         CREATE (n :`PERSON` {`name`: $par_1, `city`: $par_2})
         MERGE (n)<-[:EMPLOYS ]-(ex0)
         MERGE (n)-[:OWNS {`since`: $NODE1_par_1}]->(ex1)
-        RETURN id(n) AS neo4j_id
+        RETURN id(n) AS internal_id
         '''
         # EXAMPLE of data_binding : {'par_1': 'Julian', 'par_2': 'Berkeley', 'NODE0_VAL': 'IT', 'NODE1_VAL': 12345, 'NODE1_par_1': 2021}
 
         result = self.update_query(q, data_binding)
         #print("Result of update_query in create_node_with_relationships(): ", result)
-        # EXAMPLE: {'labels_added': 1, 'relationships_created': 2, 'nodes_created': 1, 'properties_set': 3, 'returned_data': [{'neo4j_id': 604}]}
+        # EXAMPLE: {'labels_added': 1, 'relationships_created': 2, 'nodes_created': 1, 'properties_set': 3, 'returned_data': [{'internal_id': 604}]}
 
 
         # Assert that the query produced the expected actions
@@ -1418,17 +1420,17 @@ class NeoAccess:
         if len(returned_data) == 0:
             raise Exception("Unable to extract internal ID of the newly-created node")
 
-        neo4j_id = returned_data[0].get("neo4j_id", None)
-        if neo4j_id is None:    # Note: neo4j_id might be zero
+        internal_id = returned_data[0].get("internal_id", None)
+        if internal_id is None:    # Note: internal_id might be zero
             raise Exception("Unable to extract internal ID of the newly-created node")
 
-        return neo4j_id    # Return the Neo4j ID of the new node
+        return internal_id    # Return the Neo4j ID of the new node
 
 
 
     #####################################################################################################
 
-    '''                                      ~   DELETE NODES   ~                                            '''
+    '''                                      ~   DELETE NODES   ~                                     '''
 
     def ________DELETE_NODES________(DIVIDER):
         pass        # Used to get a better structure view in IDEs
@@ -2317,7 +2319,7 @@ class NeoAccess:
             if self.apoc:
                 self.query("call apoc.schema.assert({},{})")
             else:
-                self.drop_all_constraints()    # TODO: it doesn't work in version 5.5 of the database
+                self.drop_all_constraints()    # TODO: it doesn't work in version 5.5 of the Neo4j database
 
         indexes = self.get_indexes()
         for name in indexes['name']:
@@ -2813,85 +2815,122 @@ class NeoAccess:
 
 
 
-
-    def import_json_dump(self, json_str: str) -> str:
+    def import_json_dump(self, json_str: str, extended_validation = True) -> str:
         """
-        Used to import data from a database dump done with export_dbase_json() or export_nodes_rels_json()
-        Import nodes and/or relationships into the database, as directed by the given data dump in JSON form.
-        Note: the id's of the nodes need to be shifted,
+        Used to import data from a database dump that was done with export_dbase_json() or export_nodes_rels_json().
+
+        Import nodes and relationships into the database, as specified in the JSON code
+        that was created by the earlier data dump.
+
+        IMPORTANT: the internal id's of the nodes need to be shifted,
               because one cannot force the Neo4j internal id's to be any particular value...
               and, besides (if one is importing into an existing database), particular id's may already be taken.
-        :param json_str:    A JSON string with the format specified under export_dbase_json()
-        :return:            A status message with import details if successful, or raise an Exception if not
+
+        :param json_str:            A JSON string with the format specified under export_dbase_json()
+        :param extended_validation: If True, an attempt is made to try to avoid partial imports,
+                                        by running extended validations prior to importing
+                                        (it will make a first pass thru the data, and hence take longer)
+
+        :return:                    A status message with import details if successful;
+                                        or raise an Exception if not.
+                                        If an error does occur during import then the import is aborted -
+                                        and the number of imported nodes & relationships is returned in the Exception raised.
         """
 
         try:
-            json_list = json.loads(json_str)    # Turn the string (representing a JSON list) into a list
+            json_list = json.loads(json_str)    # Turn the string (which represents a JSON list) into a list
         except Exception as ex:
-            raise Exception(f"Incorrectly-formatted JSON string. {ex}")
+            raise Exception(f"import_json_dump(): incorrectly-formatted JSON string. {ex}")
 
         if self.debug:
             print("json_list: ", json_list)
 
-        assert type(json_list) == list, "The JSON string does not represent the expected list"
+        assert type(json_list) == list, \
+            "import_json_dump(): the JSON string does not represent a list"
+
 
         id_shifting = {}    # To map the Neo4j internal ID's specified in the JSON data dump
                             #       into the ID's of newly-created nodes
 
-        # Do an initial pass for correctness, to try to avoid partial imports
-        for i, item in enumerate(json_list):
-            # We use item.get(key_name) to handle without error situation where the key is missing
-            if (item.get("type") != "node") and (item.get("type") != "relationship"):
-                raise Exception(f"Item in list index {i} must have a 'type' of either 'node' or 'relationship'.  Nothing imported.  Item: {item}")
+        if extended_validation:
+            # Do an initial pass for correctness, to help avoid partial imports.
+            # TODO: maybe also check the validity of the start and end nodes of relationships
+            for i, item in enumerate(json_list):
+                assert type(item) == dict, \
+                    f"import_json_dump(): Item in list index {i} should be a dict, but instead it's of type {type(item)}.  Nothing imported.  Item: {item}"
+                # We use item.get(key_name) to handle without error situation where the key is missing
+                if (item.get("type") != "node") and (item.get("type") != "relationship"):
+                    raise Exception(f"import_json_dump(): Item in list index {i} must be a dict with a 'type' key, "
+                                    f"whose value is either 'node' or 'relationship'.  Nothing imported.  Item: {item}")
 
-            if item["type"] == "node":
-                if "id" not in item:
-                    raise Exception(f"Item in list index {i} is marked as 'node' but it lacks an 'id'.  Nothing imported.  Item: {item}")
+                if item["type"] == "node":
+                    if "id" not in item:
+                        raise Exception(f"import_json_dump(): Item in list index {i} is marked as 'node' but it lacks an 'id'.  Nothing imported.  Item: {item}")
+                    try:
+                        int(item["id"])
+                    except ValueError:
+                        raise Exception(f"import_json_dump(): Item in list index {i} has an 'id' key whose value ({item['id']}) doesn't correspond to an integer.  "
+                                        f"Nothing imported.  Item: {item}")
 
-            elif item["type"] == "relationship":
-                if "label" not in item:
-                    raise Exception(f"Item in list index {i} is marked as 'relationship' but lacks a 'label'.  Nothing imported.  Item: {item}")
-                if "start" not in item:
-                    raise Exception(f"Item in list index {i} is marked as 'relationship' but lacks a 'start' value.  Nothing imported.  Item: {item}")
-                if "end" not in item:
-                    raise Exception(f"Item in list index {i} is marked as 'relationship' but lacks a 'end' value.  Nothing imported.  Item: {item}")
-                if "id" not in item["start"]:
-                    raise Exception(f"Item in list index {i} is marked as 'relationship' but its 'start' value lacks an 'id'.  Nothing imported.  Item: {item}")
-                if "id" not in item["end"]:
-                    raise Exception(f"Item in list index {i} is marked as 'relationship' but its 'end' value lacks an 'id'.  Nothing imported.  Item: {item}")
+                elif item["type"] == "relationship":
+                    if "label" not in item:
+                        raise Exception(f"import_json_dump(): Item in list index {i} is marked as 'relationship' but lacks a 'label'.  Nothing imported.  Item: {item}")
+                    if "start" not in item:
+                        raise Exception(f"import_json_dump(): Item in list index {i} is marked as 'relationship' but lacks a 'start' value.  Nothing imported.  Item: {item}")
+                    if "end" not in item:
+                        raise Exception(f"import_json_dump(): Item in list index {i} is marked as 'relationship' but lacks a 'end' value.  Nothing imported.  Item: {item}")
+                    if "id" not in item["start"]:
+                        raise Exception(f"import_json_dump(): Item in list index {i} is marked as 'relationship' but its 'start' value lacks an 'id'.  Nothing imported.  Item: {item}")
+                    if "id" not in item["end"]:
+                        raise Exception(f"import_json_dump(): Item in list index {i} is marked as 'relationship' but its 'end' value lacks an 'id'.  Nothing imported.  Item: {item}")
 
 
-        # First, process all the nodes, and in the process create the id_shifting map
+        # First, process all the node data, and create the nodes; while doing that, generate the id_shifting map
         num_nodes_imported = 0
-        for item in json_list:
-            if item["type"] == "node":
-                #print("ADDING NODE: ", item)
-                #print(f'     Creating node with label `{item["labels"][0]}` and properties {item["properties"]}')
-                old_id = int(item["id"])
-                new_id = self.create_node(item["labels"][0], item["properties"])  # TODO: Only the 1st label is used for now
-                id_shifting[old_id] = new_id
-                num_nodes_imported += 1
+        try:
+            for item in json_list:
+                if item["type"] == "node":
+                    #print("ADDING NODE: ", item)
+                    #print(f'     Creating node with labels `{item["labels"]}` and properties {item["properties"]}')
+                    old_id = int(item["id"])
+                    new_id = self.create_node(item["labels"], item["properties"])  # Note: any number of labels can be imported
+                    id_shifting[old_id] = new_id
+                    num_nodes_imported += 1
+        except Exception as ex:
+            raise Exception(f"import_json_dump(): the import process was INTERRUPTED "
+                            f"after importing {num_nodes_imported} node(s) and 0 relationship(s). Reason: " + str(ex))
+
 
         #print("id_shifting map:", id_shifting)
 
         # Then process all the relationships, linking to the correct (newly-created) nodes by using the id_shifting map
+        # (node: item types that aren't either "node" nor "relationship" are currently being ignored during the import)
         num_rels_imported = 0
-        for item in json_list:
-            if item["type"] == "relationship":
-                #print("ADDING RELATIONSHIP: ", item)
-                rel_name = item["label"]
-                #rel_props = item["properties"]
-                rel_props = item.get("properties")      # Also works if no "properties" is present (relationships may lack it)
+        try:
+            for item in json_list:
+                if item["type"] == "relationship":
+                    #print("ADDING RELATIONSHIP: ", item)
+                    rel_name = item["label"]
+                    #rel_props = item["properties"]
+                    rel_props = item.get("properties")      # Also works if no "properties" is present (relationships may lack it)
 
-                start_id_original = int(item["start"]["id"])
-                end_id_original = int(item["end"]["id"])
+                    start_id_original = int(item["start"]["id"])
+                    end_id_original = int(item["end"]["id"])
 
-                start_id_shifted = id_shifting[start_id_original]
-                end_id_shifted = id_shifting[end_id_original]
-                #print(f'     Creating relationship named `{rel_name}` from node {start_id_shifted} to node {end_id_shifted},  with properties {rel_props}')
+                    if start_id_original not in id_shifting:
+                        raise Exception(f"cannot add a relationship `{rel_name}` starting at node with id {start_id_original}, because no node with that id was imported")
+                    if end_id_original not in id_shifting:
+                        raise Exception(f"cannot add a relationship `{rel_name}` ending at node with id {start_id_original}, because no node with that id was imported")
 
-                self.link_nodes_by_ids(start_id_shifted, end_id_shifted, rel_name, rel_props)
-                num_rels_imported += 1
+                    start_id_shifted = id_shifting[start_id_original]
+                    end_id_shifted = id_shifting[end_id_original]
+
+                    #print(f'     Creating relationship named `{rel_name}` from node {start_id_shifted} to node {end_id_shifted},  with properties {rel_props}')
+                    self.link_nodes_by_ids(start_id_shifted, end_id_shifted, rel_name, rel_props)
+                    num_rels_imported += 1
+        except Exception as ex:
+            raise Exception(f"import_json_dump(): the import process was INTERRUPTED "
+                            f"after importing {num_nodes_imported} node(s) and {num_rels_imported} relationship(s). Reason: " + str(ex))
 
 
         return f"Successful import of {num_nodes_imported} node(s) and {num_rels_imported} relationship(s)"
@@ -2996,3 +3035,13 @@ class NeoAccess:
         indent_spaces = level*4
         indent_str = " " * indent_spaces        # Repeat a blank character the specified number of times
         return indent_str
+
+
+
+    def _debug_local(self) -> str:
+        """
+        Use to test the switch from a local to remote repository, for debugging
+
+        :return:
+        """
+        return "remote"
