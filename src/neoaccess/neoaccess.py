@@ -316,12 +316,14 @@ class NeoAccess:
 
 
     def query_extended(self, q: str, params = None, flatten = False, fields_to_exclude = None) -> [dict]:
-        """
-        Extended version of query(), meant to extract additional info for queries that return Graph Data Types,
+        """ # TODO: rename params to data_binding
+        Extended version of query(), meant to extract additional info
+        for queries that return Graph Data Types,
         i.e. nodes, relationships or paths,
         such as "MATCH (n) RETURN n", or "MATCH (n1)-[r]->(n2) RETURN r"
 
-        For example, useful in scenarios where nodes were returned, and their Neo4j internal IDs and/or labels are desired
+        For example, useful in scenarios where nodes were returned,
+        and their Neo4j internal IDs and/or labels are desired
         (in addition to all the properties and their values)
 
         Unless the flatten flag is True, individual records are kept as separate lists.
@@ -345,14 +347,14 @@ class NeoAccess:
         :return:        A (possibly empty) list of dictionaries, if flatten is True,
                         or a list of list, if flatten is False.
                         Each item in the lists is a dictionary, with details that will depend on which Graph Data Types
-                                    were returned in the Cypher query.
-                                    EXAMPLE of individual items - for a returned NODE
-                                        {'gender': 'M', 'age': 20, 'internal_id': 123, 'neo4j_labels': ['patient']}
-                                    EXAMPLE of individual items - for a returned RELATIONSHIP
-                                        {'price': 7500, 'internal_id': 2,
-                                         'neo4j_start_node': <Node id=11 labels=frozenset() properties={}>,
-                                         'neo4j_end_node': <Node id=14 labels=frozenset() properties={}>,
-                                         'neo4j_type': 'bought_by'}]
+                                were returned in the Cypher query.
+                                EXAMPLE of *individual items* - for a returned NODE
+                                    {'gender': 'M', 'age': 20, 'internal_id': 123, 'neo4j_labels': ['patient']}
+                                EXAMPLE of *individual items* - for a returned RELATIONSHIP
+                                    {'price': 7500, 'internal_id': 2,
+                                     'neo4j_start_node': <Node id=11 labels=frozenset() properties={}>,
+                                     'neo4j_end_node': <Node id=14 labels=frozenset() properties={}>,
+                                     'neo4j_type': 'bought_by'}]
         """
         # Start a new session, use it, and then immediately close it
         with self.driver.session() as new_session:
@@ -836,8 +838,6 @@ class NeoAccess:
         (node, where, data_binding) = CypherUtils.unpack_match(match_structure, include_dummy=False)
 
         q = f"MATCH {node} {CypherUtils.prepare_where(where)} RETURN id(n) AS INTERNAL_ID"
-        print(q)
-        print(data_binding)
         self.debug_query_print(q, data_binding, "get_node_internal_id")
 
         result = self.query(q, data_binding, single_column="INTERNAL_ID")
@@ -879,11 +879,12 @@ class NeoAccess:
 
     def create_node(self, labels, properties=None) -> int:
         """
-        Create a new node with the given label(s) and with the attributes/values specified in the properties dictionary.
+        Create a new node with the given label(s),
+        and with the attributes/values specified in the properties dictionary.
         Return the Neo4j internal ID of the node just created.
 
         :param labels:      A string, or list/tuple of strings, specifying Neo4j labels (ok to have blank spaces)
-        :param properties:  An optional (possibly empty or None) dictionary of properties to set for the new node.
+        :param properties:  OPTIONAL (possibly empty or None) dictionary of properties to set for the new node.
                                 EXAMPLE: {'age': 22, 'gender': 'F'}
 
         :return:            An integer with the Neo4j internal ID of the node just created
@@ -1030,7 +1031,7 @@ class NeoAccess:
     def create_node_with_links(self, labels, properties=None, links=None, merge=False) -> int:
         """
         Create a new node, with the given labels and optional properties,
-        and make it a parent of all the EXISTING nodes that are specified
+        and link it up to all the EXISTING nodes that are specified
         in the (possibly empty) list of link nodes, identified by their Neo4j internal ID's.
 
         The list of link nodes also contains the names to give to each link,
@@ -2131,20 +2132,21 @@ class NeoAccess:
 
 
 
-    def get_parents_and_children(self, node_id: int) -> ():
+    def get_parents_and_children(self, internal_id: int) -> ():
         """
         Fetch all the nodes connected to the given one by INbound relationships to it (its "parents"),
         as well as by OUTbound relationships to it (its "children")
+        TODO: allow specifying a relationship name to follow
 
-        :param node_id: An integer with a Neo4j internal node ID
-        :return:        A dictionary with 2 keys: 'parent_list' and 'child_list'
-                        The values are lists of dictionaries with 3 keys: "internal_id", "label", "rel"
-                            EXAMPLE of individual items in either parent_list or child_list:
-                            {'internal_id': 163, 'labels': ['Subject'], 'rel': 'HAS_TREATMENT'}
+        :param internal_id: An integer with a Neo4j internal node ID
+        :return:            A dictionary with 2 keys: 'parent_list' and 'child_list'
+                                The values are lists of dictionaries with 3 keys: "internal_id", "label", "rel"
+                                EXAMPLE of individual items in either parent_list or child_list:
+                                {'internal_id': 163, 'labels': ['Subject'], 'rel': 'HAS_TREATMENT'}
         """
 
         # Fetch the parents
-        cypher = f"MATCH (parent)-[inbound]->(n) WHERE id(n) = {node_id} " \
+        cypher = f"MATCH (parent)-[inbound]->(n) WHERE id(n) = {internal_id} " \
                  "RETURN id(parent) AS internal_id, labels(parent) AS labels, type(inbound) AS rel"
 
         parent_list = self.query(cypher)
@@ -2154,7 +2156,7 @@ class NeoAccess:
 
 
         # Fetch the children
-        cypher = f"MATCH (n)-[outbound]->(child) WHERE id(n) = {node_id} " \
+        cypher = f"MATCH (n)-[outbound]->(child) WHERE id(n) = {internal_id} " \
                  "RETURN id(child) AS internal_id, labels(child) AS labels, type(outbound) AS rel"
 
         child_list = self.query(cypher)
@@ -2164,6 +2166,35 @@ class NeoAccess:
 
 
         return (parent_list, child_list)
+
+
+
+    def get_siblings(self, internal_id: int, rel_name: str, dir="OUT") -> [int]:
+        """
+
+        :param internal_id:
+        :param rel_name:
+        :param dir:
+        :return:
+        """
+
+        if dir == "OUT":
+            q = f"""
+                MATCH (n)-[:{rel_name}] -> (shared) <- [:{rel_name}]-(sibling)
+                WHERE id(n) = $internal_id
+                RETURN sibling
+                """
+        else:
+            q = f"""
+                MATCH (n)-[:{rel_name}] <- (shared) -> [:{rel_name}]-(sibling)
+                WHERE id(n) = $internal_id
+                RETURN sibling
+                """
+
+        #result = self.query(q, data_binding={"internal_id": internal_id})
+        result = self.query_extended(q, params={"internal_id": internal_id}, flatten=True)
+        return result
+
 
 
 
@@ -3044,4 +3075,4 @@ class NeoAccess:
 
         :return:
         """
-        return "remote"
+        return "local"

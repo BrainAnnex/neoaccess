@@ -641,6 +641,53 @@ def test_get_parents_and_children(db):
 
 
 
+def test_get_siblings(db):
+    db.empty_dbase()
+
+    q = '''
+        CREATE (c1 :Categories {name: "French"})-[:subcategory_of]->(p :Categories {name: "Language"})<-[:subcategory_of]-
+               (c2 :Categories {name: "German"})
+        '''
+    db.update_query(q)
+
+    match = db.match(properties={"name": "French"})
+    french_id = db.get_node_internal_id(match)
+
+    match = db.match(properties={"name": "German"})
+    german_id = db.get_node_internal_id(match)
+
+    match = db.match(properties={"name": "Language"})
+    language_id = db.get_node_internal_id(match)
+
+
+    # Get all the sibling categories of a given language
+
+    # The single sibling of "French" is "German"
+    result = db.get_siblings(internal_id=french_id, rel_name="subcategory_of", dir="OUT")
+    assert result == [{'name': 'German', 'internal_id': german_id, 'neo4j_labels': ['Categories']}]
+
+    # Conversely, the single sibling of "German" is "French"
+    result = db.get_siblings(internal_id=german_id, rel_name="subcategory_of", dir="OUT")
+    assert result == [{'name': 'French', 'internal_id': french_id, 'neo4j_labels': ['Categories']}]
+
+    # Add a 3rd language category, "Italian", as a subcategory of the "Language" node
+    italian_id = db.create_attached_node(labels="Categories", properties={"name": "Italian"},
+                                         attached_to=language_id, rel_name="subcategory_of")
+
+    # Now, "French" will have 2 siblings instead of 1
+    result = db.get_siblings(internal_id=french_id, rel_name="subcategory_of", dir="OUT")
+    expected = [{'name': 'Italian', 'internal_id': italian_id, 'neo4j_labels': ['Categories']},
+                {'name': 'German', 'internal_id': german_id, 'neo4j_labels': ['Categories']}]
+    assert compare_recordsets(result, expected)
+
+    # "Italian" will also have 2 siblings
+    result = db.get_siblings(internal_id=italian_id, rel_name="subcategory_of", dir="OUT")
+    expected = [{'name': 'French', 'internal_id': french_id, 'neo4j_labels': ['Categories']},
+                {'name': 'German', 'internal_id': german_id, 'neo4j_labels': ['Categories']}]
+    assert compare_recordsets(result, expected)
+
+
+
 
 ###  ~ CREATE NODES ~
 
