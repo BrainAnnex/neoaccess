@@ -1730,14 +1730,14 @@ class NeoAccess:
 
     def add_links_fast(self, match_from: int, match_to: int, rel_name:str) -> int:
         """
-        Experimental first method optimized for speed.  Only internal database ID are used
+        Method optimized for speed.  Only internal database ID are used.
 
         Add a links (aka graph edges/relationships), with the specified rel_name,
         originating in the node identified by match_from,
         and terminating in the node identified by match_to
 
-        :param match_from:  An integer with a Neo4j node id
-        :param match_to:    An integer with a Neo4j node id
+        :param match_from:  An integer with an internal Neo4j node id
+        :param match_to:    An integer with an internal Neo4j node id
         :param rel_name:    The name to give to the new relationship between the 2 specified nodes.  Blanks allowed
 
         :return:            The number of links added.  If none got added, or in case of error, an Exception is raised
@@ -2169,29 +2169,50 @@ class NeoAccess:
 
 
 
-    def get_siblings(self, internal_id: int, rel_name: str, dir="OUT") -> [int]:
+    def get_siblings(self, internal_id: int, rel_name: str, rel_dir="OUT") -> [int]:
         """
+        Return the data of all the "sibling" nodes of the given one.
+        "Siblings" is meant as "sharing a link (by default outbound) of the specified name,
+        to a common other node".
 
-        :param internal_id:
-        :param rel_name:
-        :param dir:
-        :return:
+        EXAMPLE: 2 nodes, "French" and "German",
+                 each with a outbound link named "subcategory_of" to a third node,
+                 will be considered "siblings" under rel_name="subcategory_of" and rel_dir="OUT
+
+        :param internal_id: Integer with the internal database ID of the node of interest
+        :param rel_name:    The name of the relationship used to establish a "siblings" connection
+        :param rel_dir:     Either "OUT" (default) or "IN".  The link direction expected from the
+                                start node to its "parents" - and then IN REVERSE to the parent's children
+        :return:            A list of dictionaries, with one element for each "sibling";
+                                each element contains the 'internal_id' and 'neo4j_labels' keys,
+                                plus whatever attributes are stored on that node.
+                                EXAMPLE of single element:
+                                {'name': 'French', 'internal_id': 123, 'neo4j_labels': ['Categories']}
         """
+        CypherUtils.assert_valid_internal_id(internal_id)
 
-        if dir == "OUT":
+        assert type(rel_name) == str, \
+            f"get_siblings(): argument `rel_name` must be a string; " \
+            f"the given value ({rel_name}) is of type {type(rel_name)}"
+
+        # Follow the links with the specified name, in the indicated direction from the given link,
+        # and then in the reverse direction
+        if rel_dir == "OUT":
             q = f"""
-                MATCH (n)-[:{rel_name}] -> (shared) <- [:{rel_name}]-(sibling)
+                MATCH (n) - [:{rel_name}] -> (parent) <- [:{rel_name}] - (sibling)
+                WHERE id(n) = $internal_id
+                RETURN sibling
+                """
+        elif rel_dir == "IN":
+            q = f"""
+                MATCH (n) <- [:{rel_name}] - (parent) - [:{rel_name}] -> (sibling)
                 WHERE id(n) = $internal_id
                 RETURN sibling
                 """
         else:
-            q = f"""
-                MATCH (n)-[:{rel_name}] <- (shared) -> [:{rel_name}]-(sibling)
-                WHERE id(n) = $internal_id
-                RETURN sibling
-                """
+            raise Exception(f"get_siblings(): unknown value for the `rel_dir` argument ({rel_dir}); "
+                            f"allowed values are 'IN' and 'OUT'")
 
-        #result = self.query(q, data_binding={"internal_id": internal_id})
         result = self.query_extended(q, params={"internal_id": internal_id}, flatten=True)
         return result
 

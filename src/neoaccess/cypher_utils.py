@@ -201,7 +201,7 @@ class CypherUtils:
         :return:            None
         """
         assert type(internal_id) == int, \
-            f"assert_valid_internal_id(): Neo4j internal ID's MUST be integers; the value passed was {type(internal_id)}"
+            f"assert_valid_internal_id(): Neo4j internal ID's MUST be integers; the value passed ({internal_id}) was {type(internal_id)}"
 
         # Note that 0 is a valid Neo4j ID (apparently inconsistently assigned, on occasion, by the database)
         assert internal_id >= 0, \

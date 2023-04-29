@@ -644,46 +644,87 @@ def test_get_parents_and_children(db):
 def test_get_siblings(db):
     db.empty_dbase()
 
+    # Create "French" and "German" nodes, as subcategory of "Language"
     q = '''
         CREATE (c1 :Categories {name: "French"})-[:subcategory_of]->(p :Categories {name: "Language"})<-[:subcategory_of]-
                (c2 :Categories {name: "German"})
+        RETURN id(c1) AS french_id, id(c2) AS german_id, id(p) AS language_id
         '''
-    db.update_query(q)
+    create_result = db.query(q, single_row=True)
 
-    match = db.match(properties={"name": "French"})
-    french_id = db.get_node_internal_id(match)
-
-    match = db.match(properties={"name": "German"})
-    german_id = db.get_node_internal_id(match)
-
-    match = db.match(properties={"name": "Language"})
-    language_id = db.get_node_internal_id(match)
+    (french_id, german_id, language_id) = list( map(create_result.get, ["french_id", "german_id", "language_id"]) )
 
 
     # Get all the sibling categories of a given language
 
+    with pytest.raises(Exception):
+        db.get_siblings(internal_id=french_id, rel_name=666, rel_dir="OUT") # rel_name isn't a string
+
+    with pytest.raises(Exception):
+        db.get_siblings(internal_id="Do I look like an ID?", rel_name="subcategory_of", rel_dir="OUT")
+
+    with pytest.raises(Exception):
+        db.get_siblings(internal_id=french_id, rel_name="subcategory_of", rel_dir="Is it IN or OUT")
+
     # The single sibling of "French" is "German"
-    result = db.get_siblings(internal_id=french_id, rel_name="subcategory_of", dir="OUT")
+    result = db.get_siblings(internal_id=french_id, rel_name="subcategory_of", rel_dir="OUT")
     assert result == [{'name': 'German', 'internal_id': german_id, 'neo4j_labels': ['Categories']}]
 
     # Conversely, the single sibling of "German" is "French"
-    result = db.get_siblings(internal_id=german_id, rel_name="subcategory_of", dir="OUT")
+    result = db.get_siblings(internal_id=german_id, rel_name="subcategory_of", rel_dir="OUT")
     assert result == [{'name': 'French', 'internal_id': french_id, 'neo4j_labels': ['Categories']}]
+
+    # But attempting to follow the links in the opposite directions will yield no results
+    result = db.get_siblings(internal_id=german_id, rel_name="subcategory_of", rel_dir="IN")    # "wrong" direction
+    assert result == []
 
     # Add a 3rd language category, "Italian", as a subcategory of the "Language" node
     italian_id = db.create_attached_node(labels="Categories", properties={"name": "Italian"},
                                          attached_to=language_id, rel_name="subcategory_of")
 
     # Now, "French" will have 2 siblings instead of 1
-    result = db.get_siblings(internal_id=french_id, rel_name="subcategory_of", dir="OUT")
+    result = db.get_siblings(internal_id=french_id, rel_name="subcategory_of", rel_dir="OUT")
     expected = [{'name': 'Italian', 'internal_id': italian_id, 'neo4j_labels': ['Categories']},
                 {'name': 'German', 'internal_id': german_id, 'neo4j_labels': ['Categories']}]
     assert compare_recordsets(result, expected)
 
     # "Italian" will also have 2 siblings
-    result = db.get_siblings(internal_id=italian_id, rel_name="subcategory_of", dir="OUT")
+    result = db.get_siblings(internal_id=italian_id, rel_name="subcategory_of", rel_dir="OUT")
     expected = [{'name': 'French', 'internal_id': french_id, 'neo4j_labels': ['Categories']},
                 {'name': 'German', 'internal_id': german_id, 'neo4j_labels': ['Categories']}]
+    assert compare_recordsets(result, expected)
+
+    # Add a node that is a "parent" of "French" and "Italian" thru a different relationship
+    db.create_attached_node(labels="Language Family", properties={"name": "Romance"},
+                            attached_to=[french_id, italian_id], rel_name="contains")
+
+    # Now, "French" will also have a sibling thru the "contains" relationship
+    result = db.get_siblings(internal_id=french_id, rel_name="contains", rel_dir="IN")
+    expected = [{'name': 'Italian', 'internal_id': italian_id, 'neo4j_labels': ['Categories']}]
+    assert compare_recordsets(result, expected)
+
+    # Likewise for the "Italian" node
+    result = db.get_siblings(internal_id=italian_id, rel_name="contains", rel_dir="IN")
+    expected = [{'name': 'French', 'internal_id': french_id, 'neo4j_labels': ['Categories']}]
+    assert compare_recordsets(result, expected)
+
+    # "Italian" still has 2 siblings thru the other relationship "subcategory_of"
+    result = db.get_siblings(internal_id=italian_id, rel_name="subcategory_of", rel_dir="OUT")
+    expected = [{'name': 'French', 'internal_id': french_id, 'neo4j_labels': ['Categories']},
+                {'name': 'German', 'internal_id': german_id, 'neo4j_labels': ['Categories']}]
+    assert compare_recordsets(result, expected)
+
+    # Add an unattached node
+    brazilian_id = db.create_node(labels="Categories", properties={"name": "Brazilian"})
+    result = db.get_siblings(internal_id=brazilian_id, rel_name="subcategory_of", rel_dir="OUT")
+    assert result == []     # No siblings
+
+    # After connecting the "Brazilian" node to the "Language" node, it has 3 siblings
+    db.add_links_fast(match_from=brazilian_id, match_to=language_id, rel_name="subcategory_of")
+    result = db.get_siblings(internal_id=brazilian_id, rel_name="subcategory_of", rel_dir="OUT")
+    expected = [{'name': 'French', 'internal_id': french_id, 'neo4j_labels': ['Categories']},
+                {'name': 'German', 'internal_id': german_id, 'neo4j_labels': ['Categories']},
+                {'name': 'Italian', 'internal_id': italian_id, 'neo4j_labels': ['Categories']}]
     assert compare_recordsets(result, expected)
 
 
