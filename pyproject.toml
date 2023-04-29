@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "neoaccess"
-version = "4.1.0"
+version = "4.2.0"
 authors = [
   { name = "Julian West BrainAnnex.org" },
 ]
@@ -21,7 +21,7 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-  "neo4j==4.3.9",
+  "neo4j==4.4.11",
   "numpy~=1.22.4",
   "pandas~=1.4.3",
 ]
