@@ -315,8 +315,8 @@ class NeoAccess:
 
 
 
-    def query_extended(self, q: str, params = None, flatten = False, fields_to_exclude = None) -> [dict]:
-        """ # TODO: rename params to data_binding
+    def query_extended(self, q: str, data_binding = None, flatten = False, fields_to_exclude = None) -> [dict]:
+        """
         Extended version of query(), meant to extract additional info
         for queries that return Graph Data Types,
         i.e. nodes, relationships or paths,
@@ -336,7 +336,7 @@ class NeoAccess:
             Try running with flatten=True "MATCH (b:boat), (c:car) RETURN b, c" on data like "CREATE (b:boat), (c1:car1), (c2:car2)"
 
         :param q:       A Cypher query
-        :param params:  An optional Cypher dictionary
+        :param data_binding:  An optional Cypher dictionary
                             EXAMPLE, assuming that the cypher string contains the substring "$age":
                                         {'age': 20}
         :param flatten: Flag indicating whether the Graph Data Types need to remain clustered by record,
@@ -358,9 +358,9 @@ class NeoAccess:
         """
         # Start a new session, use it, and then immediately close it
         with self.driver.session() as new_session:
-            result = new_session.run(q, params)
+            result = new_session.run(q, data_binding)
             if self.profiling:
-                print("-- query_extended() PROFILING ----------\n", q, "\n", params)
+                print("-- query_extended() PROFILING ----------\n", q, "\n", data_binding)
 
             # Note: A neo4j.Result iterable object (printing it, shows an object of type "neo4j.work.result.Result")
             #       See https://neo4j.com/docs/api/python-driver/current/api.html#neo4j.Result
@@ -2213,7 +2213,7 @@ class NeoAccess:
             raise Exception(f"get_siblings(): unknown value for the `rel_dir` argument ({rel_dir}); "
                             f"allowed values are 'IN' and 'OUT'")
 
-        result = self.query_extended(q, params={"internal_id": internal_id}, flatten=True)
+        result = self.query_extended(q, data_binding={"internal_id": internal_id}, flatten=True)
         return result
 
 
@@ -2258,9 +2258,9 @@ class NeoAccess:
             RETURN DISTINCT propertyName 
             ORDER BY propertyName
             """
-        params = {'label': label}
+        data_binding = {'label': label}
 
-        return [res['propertyName'] for res in self.query(q, params)]
+        return [res['propertyName'] for res in self.query(q, data_binding)]
 
 
 
