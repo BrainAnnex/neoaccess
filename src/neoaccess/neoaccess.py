@@ -883,7 +883,8 @@ class NeoAccess:
         and with the attributes/values specified in the properties dictionary.
         Return the Neo4j internal ID of the node just created.
 
-        :param labels:      A string, or list/tuple of strings, specifying Neo4j labels (ok to have blank spaces)
+        :param labels:      A string, or list/tuple of strings, specifying Neo4j labels (ok to have blank spaces inside labels);
+                                to create a node without labels (NOT recommended), use an empty string or None
         :param properties:  OPTIONAL (possibly empty or None) dictionary of properties to set for the new node.
                                 EXAMPLE: {'age': 22, 'gender': 'F'}
 
@@ -1404,26 +1405,26 @@ class NeoAccess:
 
         # Assert that the query produced the expected actions
         if result.get("nodes_created") != 1:
-            raise Exception("Failed to create 1 new node")
+            raise Exception("create_node_with_relationships(): failed to create 1 new node")
 
         if result.get("relationships_created") != len(connections):
-            raise Exception(f"New node created as expected, but failed to create all the {len(connections)} expected relationships")
+            raise Exception(f"create_node_with_relationships(): New node created as expected, but failed to create all the {len(connections)} expected relationships")
 
         expected_number_labels = (1 if type(labels) == str else len(labels))
         if result.get("labels_added") != expected_number_labels:
-            raise Exception(f"Failed to set the {expected_number_labels} label(s) expected on the new node")
+            raise Exception(f"create_node_with_relationships(): Failed to set the {expected_number_labels} label(s) expected on the new node")
 
         if result.get("properties_set") != number_props_to_set:
-            raise Exception(f"Failed to set all the {number_props_to_set} properties on the new node and its relationships")
+            raise Exception(f"create_node_with_relationships(): Failed to set all the {number_props_to_set} properties on the new node and its relationships")
 
         returned_data = result.get("returned_data")
         #print("returned_data", returned_data)
         if len(returned_data) == 0:
-            raise Exception("Unable to extract internal ID of the newly-created node")
+            raise Exception("create_node_with_relationships(): Unable to extract internal ID of the newly-created node")
 
         internal_id = returned_data[0].get("internal_id", None)
         if internal_id is None:    # Note: internal_id might be zero
-            raise Exception("Unable to extract internal ID of the newly-created node")
+            raise Exception("create_node_with_relationships(): Unable to extract internal ID of the newly-created node")
 
         return internal_id    # Return the Neo4j ID of the new node
 
@@ -2169,7 +2170,7 @@ class NeoAccess:
 
 
 
-    def get_siblings(self, internal_id: int, rel_name: str, rel_dir="OUT") -> [int]:
+    def get_siblings(self, internal_id: int, rel_name: str, rel_dir="OUT") -> [dict]:
         """
         Return the data of all the "sibling" nodes of the given one.
         "Siblings" is meant as "sharing a link (by default outbound) of the specified name,
@@ -2186,7 +2187,7 @@ class NeoAccess:
         :return:            A list of dictionaries, with one element for each "sibling";
                                 each element contains the 'internal_id' and 'neo4j_labels' keys,
                                 plus whatever attributes are stored on that node.
-                                EXAMPLE of single element:
+                                EXAMPLE of single list element:
                                 {'name': 'French', 'internal_id': 123, 'neo4j_labels': ['Categories']}
         """
         CypherUtils.assert_valid_internal_id(internal_id)
@@ -2945,12 +2946,15 @@ class NeoAccess:
                     #print("ADDING NODE: ", item)
                     #print(f'     Creating node with labels `{item["labels"]}` and properties {item["properties"]}')
                     old_id = int(item["id"])
-                    new_id = self.create_node(item["labels"], item["properties"])  # Note: any number of labels can be imported
+                    new_id = self.create_node(item.get("labels"), item.get("properties"))   # Note: any number of labels can be imported
+                                                                                            # get() returns a None if that key is missing
                     id_shifting[old_id] = new_id
                     num_nodes_imported += 1
         except Exception as ex:
+            (exc_type, _, _) = sys.exc_info()       # To provide more helpful details about errors
+            error_details = str(exc_type) + " : " + str(ex)
             raise Exception(f"import_json_dump(): the import process was INTERRUPTED "
-                            f"after importing {num_nodes_imported} node(s) and 0 relationship(s). Reason: " + str(ex))
+                            f"after importing {num_nodes_imported} node(s) and 0 relationship(s). Reason: {error_details}")
 
 
         #print("id_shifting map:", id_shifting)
@@ -2981,8 +2985,10 @@ class NeoAccess:
                     self.link_nodes_by_ids(start_id_shifted, end_id_shifted, rel_name, rel_props)
                     num_rels_imported += 1
         except Exception as ex:
+            (exc_type, _, _) = sys.exc_info()       # To provide more helpful details about errors
+            error_details = str(exc_type) + " : " + str(ex)
             raise Exception(f"import_json_dump(): the import process was INTERRUPTED "
-                            f"after importing {num_nodes_imported} node(s) and {num_rels_imported} relationship(s). Reason: " + str(ex))
+                            f"after importing {num_nodes_imported} node(s) and {num_rels_imported} relationship(s). Reason: {error_details}")
 
 
         return f"Successful import of {num_nodes_imported} node(s) and {num_rels_imported} relationship(s)"
@@ -3096,4 +3102,4 @@ class NeoAccess:
 
         :return:
         """
-        return "local"
+        return "remote"

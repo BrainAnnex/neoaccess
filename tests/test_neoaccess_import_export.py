@@ -106,7 +106,8 @@ def test_export_dbase_json(db):
 
 
 
-def test_export_nodes_rels_json(db):    # TODO: this test intermittently fails; probably an assert issue involving order
+def test_export_nodes_rels_json(db):    # TODO: this test intermittently fails, due an assert issue involving order in a JSON string;
+                                        #       it may be better to first parse the JSON string into a python entity and then assert
     db.empty_dbase()
 
     # Start by exporting everything in the empty database
@@ -308,9 +309,11 @@ def test_import_json_data(db):
         db.import_json_dump(json)                               # Trying to add a relationship between non-existing nodes
 
 
+
     # Now, test actual imports
 
     db.empty_dbase()    # Completely clear the database
+
 
     # Import a 1st node
     json = '[{"type":"node","id":"123","labels":["User"],"properties":{"name":"Eve"}}]'
@@ -382,3 +385,20 @@ def test_import_json_data(db):
         '''
     result = db.query(q, single_row=True)
     assert result == {'num_eve': 1, 'num_adam': 1, 'id_eve': id_eve, 'id_adam': id_adam}
+
+
+    # Re-start with an empty database
+    db.empty_dbase()    # Completely clear the database
+
+    json = '[{"type":"node","id":"123","labels":["Node without Properties"]}]'
+    db.import_json_dump(json)
+
+    match = db.match(labels="Node without Properties")
+    retrieved_records = db.get_nodes(match)
+    assert len(retrieved_records) == 1
+
+    json = '[{"type":"node","id":"456","properties":{"description":"Node without labels"}}]'
+    db.import_json_dump(json)
+    match = db.match(properties={"description":"Node without labels"})
+    retrieved_records = db.get_nodes(match)
+    assert len(retrieved_records) == 1

@@ -224,8 +224,18 @@ class CypherUtils:
 
     @classmethod
     def process_match_structure(cls, handle: Union[int, dict], dummy_node_name="n") -> dict:
+        """
+
+        :param handle:
+        :param dummy_node_name:
+        :return:
+        """
         if cls.validate_internal_id(handle):
             return cls.define_match(internal_id=handle, dummy_node_name=dummy_node_name)
+
+        assert type(handle) == dict, \
+            f"process_match_structure(): the `handle` argument ({handle}) must be either a non-negative int or a dict; " \
+            f"instead, it's of type {type(handle)}"
 
         if handle.get("dummy_node_name") is not None:
             dummy_node_name = handle.get("dummy_node_name") # If a value is already present in the raw match structure,
