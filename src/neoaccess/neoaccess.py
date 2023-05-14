@@ -42,14 +42,14 @@ class NeoAccess:
         * JSON IMPORT/EXPORT
         * DEBUGGING SUPPORT
 
-    Plus separate class "CypherUtils"
+    Plus a separate class "CypherUtils"
 
     ----------------------------------------------------------------------------------
     HISTORY and AUTHORS:
         - NeoAccess (this library) is a fork of NeoInterface;
                 NeoAccess was created, and is being maintained, by Julian West,
                 primarily in the context of the BrainAnnex.org open-source project.
-                It started out in late 2021; for change log thru 2022,
+                It started out in late 2021; for change log,
                 see the "LIBRARIES" entries in https://brainannex.org/viewer.php?ac=2&cat=14
 
         - NeoInterface (the parent library)
@@ -182,7 +182,7 @@ class NeoAccess:
 
     def version(self) -> str:
         """
-        Return the version of the Neo4j driver being used.  EXAMPLE: "4.3.9"
+        Return the version of the Neo4j driver being used.  EXAMPLE: "4.4.11"
 
         :return:    A string with the version number
         """
@@ -552,8 +552,9 @@ class NeoAccess:
 
         if len(result) == 0:
             return None
-        if len(result) > 1:
-            raise Exception(f"NeoAccess.get_record_by_primary_key(): multiple records ({len(result)}) share the value (`{primary_key_value}`) in the primary key ({primary_key_name})")
+        if len(result) > 1:     # Irregular situation where the supposed primary key occurs multiple times
+            raise Exception(f"NeoAccess.get_record_by_primary_key(): multiple records ({len(result)}) "
+                            f"share the value (`{primary_key_value}`) in the primary key ({primary_key_name}), with the requested labels ({labels})")
 
         return result[0]
 
@@ -1510,9 +1511,9 @@ class NeoAccess:
 
 
 
-    def bulk_delete_by_label(self, label: str):    # TODO: test.  CAUTION: only tested interactively
+    def bulk_delete_by_label(self, label: str) -> dict:    # TODO: test.  CAUTION: only tested interactively
         """
-        IMPORTANT: APOC required (starting from v 4.4 of Neo4j, will be able to do this without APOC)
+        IMPORTANT: APOC required (but starting from v 4.4 of Neo4j, will be able to do this without APOC)
 
         Meant for large databases, where the straightforward deletion operations may result
         in very large number of nodes, and take a long time (or possibly fail)
@@ -2133,7 +2134,7 @@ class NeoAccess:
 
 
 
-    def get_parents_and_children(self, internal_id: int) -> ():
+    def get_parents_and_children(self, internal_id: int) -> tuple:
         """
         Fetch all the nodes connected to the given one by INbound relationships to it (its "parents"),
         as well as by OUTbound relationships to it (its "children")
@@ -2671,7 +2672,6 @@ class NeoAccess:
 
 
 
-
     def is_literal(self, value) -> bool:
         """
         Return True if the given value represents a literal (in terms of database storage)
@@ -2727,7 +2727,6 @@ class NeoAccess:
             self.set_fields(node_id, set_dict={"source": provenance})
 
         return result
-
 
 
 

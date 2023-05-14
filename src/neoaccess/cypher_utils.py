@@ -61,7 +61,7 @@ class CypherUtils:
                                 EXAMPLES:  "cars"
                                             ("cars", "vehicles")
 
-        :param internal_id:      An integer with the node's internal ID.
+        :param internal_id: An integer with the node's internal ID.
                                 If specified, it OVER-RIDES all the remaining arguments, except for the labels
 
         :param key_name:    A string with the name of a node attribute; if provided, key_value must be present, too
@@ -212,11 +212,11 @@ class CypherUtils:
     @classmethod
     def validate_internal_id(cls, internal_id: int) -> bool:    # TODO: maybe phase out in favor of assert_valid_internal_id()
         """
-        Return True if internal_id is a valid ID as used internally by the database
-        (aka "Neo4j ID")
+        Return True if internal_id is a valid Neo4j internal database ID
 
-        :param internal_id:
-        :return:
+        :param internal_id: Alleged Neo4j internal database ID
+        :return:            True if internal_id is a valid Neo4j internal database ID,
+                                or False otherwise
         """
         return (type(internal_id) == int) and (internal_id >= 0)
 
@@ -227,8 +227,9 @@ class CypherUtils:
         """
 
         :param handle:
-        :param dummy_node_name:
-        :return:
+        :param dummy_node_name: A string with a name by which to refer to the node (by default, "n")
+        :return:                A dictionary of data storing the parameters of the match.
+                                For details, see the info stored in the comments for this Class
         """
         if cls.validate_internal_id(handle):
             return cls.define_match(internal_id=handle, dummy_node_name=dummy_node_name)
