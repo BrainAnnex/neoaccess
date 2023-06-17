@@ -3,7 +3,6 @@
 
 import pytest
 from src.neoaccess import neoaccess as neo_access
-from src.neoaccess.cypher_utils import CypherUtils
 from utilities.comparisons import compare_unordered_lists, compare_recordsets
 import os
 import pandas as pd
@@ -734,7 +733,6 @@ def test_get_siblings(db):
 
 def test_create_node(db):
     """
-    MAIN FOCUS: create_node()
     Test the trio:  1) clear dbase
                     2) create multiple new nodes (MAIN FOCUS)
                     3) retrieve the newly created nodes, using retrieve_nodes_by_label_and_clause()
@@ -2049,119 +2047,3 @@ def test_debug_trim_print(db):
 
 def test_indent_chooser(db):
     pass    # TODO
-
-
-
-
-#####################   For the "CypherUtils" class   #################
-
-
-def test_define_match(db):
-    pass    # TODO
-
-
-def test_assert_valid_match_structure(db):
-    with pytest.raises(Exception):
-        assert CypherUtils.assert_valid_match_structure(3)
-
-    with pytest.raises(Exception):
-        assert CypherUtils.assert_valid_match_structure("hello")
-
-    with pytest.raises(Exception):
-        assert CypherUtils.assert_valid_match_structure(["hi there"])
-
-    with pytest.raises(Exception):
-        assert CypherUtils.assert_valid_match_structure({"a": 1, "b": 2, "c": 3, "d": 4})
-
-    with pytest.raises(Exception):
-        assert CypherUtils.assert_valid_match_structure({"node": 1, "where": 2, "data_binding": 3, "dummy_node_name": 4})
-
-    CypherUtils.assert_valid_match_structure({"node": "hi", "where": "there", "data_binding": {}, "dummy_node_name": "the end"})
-
-    match = db.match()
-    match_structure = CypherUtils.process_match_structure(match)
-    CypherUtils.assert_valid_match_structure(match_structure)
-
-
-
-def test_validate_and_standardize(db):
-    pass    # TODO
-
-
-
-def test_unpack_match(db):
-    pass    # TODO
-
-
-
-def test_check_match_compatibility(db):
-    pass    # TODO
-
-
-
-def test_prepare_labels():
-    lbl = ""
-    assert CypherUtils.prepare_labels(lbl) == ""
-
-    lbl = "client"
-    assert CypherUtils.prepare_labels(lbl) == ":`client`"
-
-    lbl = ["car", "car manufacturer"]
-    assert CypherUtils.prepare_labels(lbl) == ":`car`:`car manufacturer`"
-
-
-
-def test_combined_where(db):
-    pass    # TODO
-
-
-def test_prepare_where():
-    assert CypherUtils.prepare_where("") == ""
-    assert CypherUtils.prepare_where("      ") == ""
-    assert CypherUtils.prepare_where([]) == ""
-    assert CypherUtils.prepare_where([""]) == ""
-    assert CypherUtils.prepare_where(("  ", "")) == ""
-
-    wh = "n.name = 'Julian'"
-    assert CypherUtils.prepare_where(wh) == "WHERE (n.name = 'Julian')"
-
-    wh = ["n.name = 'Julian'"]
-    assert CypherUtils.prepare_where(wh) == "WHERE (n.name = 'Julian')"
-
-    wh = ("p.key1 = 123", "   ",  "p.key2 = 456")
-    assert CypherUtils.prepare_where(wh) == "WHERE (p.key1 = 123 AND p.key2 = 456)"
-
-    with pytest.raises(Exception):
-        assert CypherUtils.prepare_where(123)    # Not a string, nor tuple, nor list
-
-
-
-def test_combined_data_binding(db):
-    pass    # TODO
-
-
-
-def test_dict_to_cypher():
-    d = {'since': 2003, 'code': 'xyz'}
-    assert CypherUtils.dict_to_cypher(d) == ('{`since`: $par_1, `code`: $par_2}', {'par_1': 2003, 'par_2': 'xyz'})
-
-    d = {'year first met': 2003, 'code': 'xyz'}
-    assert CypherUtils.dict_to_cypher(d) == ('{`year first met`: $par_1, `code`: $par_2}', {'par_1': 2003, 'par_2': 'xyz'})
-
-    d = {'year first met': 2003, 'code': 'xyz'}
-    assert CypherUtils.dict_to_cypher(d, prefix="val_") == ('{`year first met`: $val_1, `code`: $val_2}', {'val_1': 2003, 'val_2': 'xyz'})
-
-    d = {'cost': 65.99, 'code': 'the "red" button'}
-    assert CypherUtils.dict_to_cypher(d) == ('{`cost`: $par_1, `code`: $par_2}', {'par_1': 65.99, 'par_2': 'the "red" button'})
-
-    d = {'phrase': "it's ready!"}
-    assert CypherUtils.dict_to_cypher(d) == ('{`phrase`: $par_1}', {'par_1': "it's ready!"})
-
-    d = {'phrase': '''it's "ready"!'''}
-    assert CypherUtils.dict_to_cypher(d) == ('{`phrase`: $par_1}', {'par_1': 'it\'s "ready"!'})
-
-    d = None
-    assert CypherUtils.dict_to_cypher(d) == ("", {})
-
-    d = {}
-    assert CypherUtils.dict_to_cypher(d) == ("", {})
