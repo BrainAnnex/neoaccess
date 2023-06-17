@@ -84,13 +84,40 @@ class NodeSpecs:
         self.key_value = key_value
         self.properties = properties
         self.clause = clause
-        self.dummy_node_name = dummy_node_name
+        self.dummy_node_name = dummy_node_name  # TODO: change to clause_dummy_name
+
+
+    def __str__(self):
+        return f"RAW match structure:\n" \
+                f"    internal_id: {self.internal_id}" \
+                f"    labels: {self.labels}" \
+                f"    key_name: {self.key_name}" \
+                f"    key_value: {self.key_value}" \
+                f"    properties: {self.properties}" \
+                f"    clause: {self.clause}" \
+                f"    dummy_node_name: {self.dummy_node_name}"
 
 
 
 class CypherMatch:
 
-    def __init__(self, labels=None, internal_id=None, key_name=None, key_value=None, properties=None, subquery=None, dummy_node_name="n"):
+    def __init__(self, node_specs, dummy_node_name_if_missing=None):
+
+        internal_id=node_specs.internal_id
+        labels=node_specs.labels
+        key_name=node_specs.key_name
+        key_value=node_specs.key_value
+        properties=node_specs.properties
+        subquery=node_specs.clause
+
+        # If a value is already present in the raw match structure,
+        # it takes priority
+        if node_specs.dummy_node_name is None:
+            dummy_node_name = dummy_node_name_if_missing
+        else:
+            dummy_node_name = node_specs.dummy_node_name
+
+        assert dummy_node_name is not None, "The class `CypherMatch` cannot be instantiated with a missing dummy none name"
 
         # Turn labels (string or list/tuple of strings) into a string suitable for inclusion into Cypher
         cypher_labels = CypherUtils.prepare_labels(labels)      # EXAMPLES:     ":`patient`"
@@ -182,6 +209,12 @@ class CypherMatch:
         self.dummy_node_name = dummy_node_name
 
 
+    def __str__(self):
+        return f"CYPHER-PROCESSED match structure:\n" \
+               f"    node: {self.node}" \
+               f"    where: {self.where}" \
+               f"    data_binding: {self.data_binding}" \
+               f"    dummy_node_name: {self.dummy_node_name}"
 
 
 
@@ -238,19 +271,11 @@ class CypherUtils:
         :return:
         """
         if cls.validate_internal_id(handle):
-            return CypherMatch(internal_id=handle, dummy_node_name=dummy_node_name)
+            node_specs = NodeSpecs(internal_id=handle)
+            return CypherMatch(node_specs, dummy_node_name_if_missing=dummy_node_name)
 
-        if handle.dummy_node_name is not None:
-            dummy_node_name = handle.dummy_node_name    # If a value is already present in the raw match structure,
-                                                        # it takes priority
 
-        return CypherMatch(internal_id=handle.internal_id,
-                                labels=handle.labels,
-                                key_name=handle.key_name, key_value=handle.key_value,
-                                properties=handle.properties,
-                                subquery=handle.clause,
-                                dummy_node_name=dummy_node_name)
-
+        return CypherMatch(handle, dummy_node_name_if_missing=dummy_node_name)
 
 
 
@@ -274,7 +299,7 @@ class CypherUtils:
     @classmethod
     def extract_node(cls, match: CypherMatch) -> str:
         """
-        Return the node information from the given "match" data structure
+        Return the node information from the given "CypherMatch" object
 
         :param match:   A dictionary, as created by CypherMatch()
         :return:        A string with the node information.  EXAMPLES:

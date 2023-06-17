@@ -861,7 +861,7 @@ class NeoAccess:
         :param properties:  OPTIONAL (possibly empty or None) dictionary of properties to set for the new node.
                                 EXAMPLE: {'age': 22, 'gender': 'F'}
 
-        :return:            An integer with the Neo4j internal ID of the node just created
+        :return:            An integer with the internal database ID of the node just created
         """
 
         if properties is None:
@@ -1630,8 +1630,8 @@ class NeoAccess:
     def add_links(self, match_from: Union[int, NodeSpecs], match_to: Union[int, NodeSpecs], rel_name:str) -> int:
         """
         Add one or more links (aka graph edges/relationships), with the specified rel_name,
-        originating in any of the nodes specified by the match_from specifications,
-        and terminating in any of the nodes specified by the match_to specifications
+        originating in each of the nodes specified by the match_from specifications,
+        and terminating in each of the nodes specified by the match_to specifications
 
         Return the number of links added; if none were added, or in case of error, raise an Exception.
 
@@ -1642,41 +1642,39 @@ class NeoAccess:
               (Unclear what multiple calls would do in this case: update the props or create a new relationship??)
 
         :param match_from:  EITHER an integer with an internal database node id,
-                                OR a dictionary of data to identify a node, or set of nodes, as returned by match()
+                                OR a "NodeSpecs" object with data to identify a node, or set of nodes, as returned by match()
         :param match_to:    EITHER an integer with an internal database node id,
-                                OR a dictionary of data to identify a node, or set of nodes, as returned by match()
+                                 OR a "NodeSpecs" object with data to identify a node, or set of nodes, as returned by match()
                             Note: match_from and match_to, if created by calls to match(),
-                                  in scenarios where a dummy name is used,
-                                  MUST use different node dummy names;
-                                  e.g., make sure that for match_from, match() used the option: dummy_node_name="from"
-                                                     and for match_to, match() used the option: dummy_node_name="to"
+                                  in scenarios where a dummy name is actually used (e.g. involving clauses),
+                                  MUST use different node dummy names.
 
         :param rel_name:    The name to give to all the new relationships between the 2 specified nodes, or sets or nodes.
                                 Blanks allowed.
 
         :return:            The number of edges added.  If none got added, or in case of error, an Exception is raised
         """
-        # Create the "processed-match dictionaries"
-        match_from = CypherUtils.process_match_structure(match_from, dummy_node_name="from")
-        match_to   = CypherUtils.process_match_structure(match_to, dummy_node_name="to")
+        # Create the corresponding "CypherMatch" objects
+        cypher_match_from = CypherUtils.process_match_structure(match_from, dummy_node_name="from")
+        cypher_match_to   = CypherUtils.process_match_structure(match_to, dummy_node_name="to")
 
         if self.debug:
             print("In add_links()")
-            print("    match_from:", match_from)
-            print("    match_to:", match_to)
+            print("    cypher_match_from:", cypher_match_from)
+            print("    cypher_match_to:", cypher_match_to)
 
         # Make sure there's no conflict in node dummy names
-        CypherUtils.check_match_compatibility(match_from, match_to)
+        CypherUtils.check_match_compatibility(cypher_match_from, cypher_match_to)
 
-        # Unpack needed values from the match_from and match_to structures
-        nodes_from = CypherUtils.extract_node(match_from)
-        nodes_to   = CypherUtils.extract_node(match_to)
+        # Unpack needed values from the cypher_match_from and cypher_match_to structures
+        nodes_from = CypherUtils.extract_node(cypher_match_from)
+        nodes_to   = CypherUtils.extract_node(cypher_match_to)
 
-        where_clause = CypherUtils.combined_where([match_from, match_to])   # Combine the two WHERE clauses from each of the matches,
+        where_clause = CypherUtils.combined_where([cypher_match_from, cypher_match_to])   # Combine the two WHERE clauses from each of the matches,
         # and also prefix (if appropriate) the WHERE keyword
 
-        from_dummy_name = CypherUtils.extract_dummy_name(match_from)
-        to_dummy_name = CypherUtils.extract_dummy_name(match_to)
+        from_dummy_name = CypherUtils.extract_dummy_name(cypher_match_from)
+        to_dummy_name = CypherUtils.extract_dummy_name(cypher_match_to)
 
         # Prepare the query to add the requested links between the given nodes (possibly, sets of nodes)
         q = f'''
@@ -1686,7 +1684,7 @@ class NeoAccess:
             '''
 
         # Merge the data-binding dict's
-        combined_data_binding = CypherUtils.combined_data_binding([match_from, match_to])
+        combined_data_binding = CypherUtils.combined_data_binding([cypher_match_from, cypher_match_to])
 
         self.debug_query_print(q, combined_data_binding, "add_links")
 
