@@ -43,7 +43,9 @@ class NeoAccess:
         * JSON IMPORT/EXPORT
         * DEBUGGING SUPPORT
 
-    Plus separate class "CypherUtils"
+    Plus separate classes in the file cypher_utils.py
+
+    TODO: consider splitting into NeoAccessCore and NeoAccess
 
     ----------------------------------------------------------------------------------
     HISTORY and AUTHORS:
@@ -60,7 +62,7 @@ class NeoAccess:
                 NeoInterface is in part based on the earlier library Neo4jLiaison,
                 as well as a library developed by Alexey Kuznetsov.
 
-        - Neo4jLiaison, now deprecated, was authored by Julian West in 2020
+        - Neo4jLiaison, an ancestor library now obsoleted, was authored by Julian West in 2020
                 (https://github.com/BrainAnnex/neo4j-liaison)
 
     ----------------------------------------------------------------------------------
@@ -606,8 +608,8 @@ class NeoAccess:
         and one desires a list of the values of that field, rather than a dictionary of records.
         In other respects, similar to the more general get_nodes()
 
-        :param match:       EITHER an integer with a Neo4j node id,
-                                OR a dictionary of data to identify a node, or set of nodes, as returned by match()
+        :param match:       EITHER an integer with an internal database node id,
+                                OR a "NodeSpecs" object, as returned by match(), with data to identify a node or set of nodes
         :param field_name:  A string with the name of the desired field (attribute)
         :param order_by:    see get_nodes()
         :param limit:       see get_nodes()
@@ -630,9 +632,8 @@ class NeoAccess:
         RETURN a list of the records (as dictionaries of ALL the key/value node properties)
         corresponding to all the Neo4j nodes specified by the given match data.
 
-        :param match:           EITHER an integer with a Neo4j node id,
-                                OR a "NodeSpecs" object with data to identify a node, or set of nodes,
-                                as returned by match()
+        :param match:           EITHER an integer with an internal database node id,
+                                    OR a "NodeSpecs" object, as returned by match(), with data to identify a node or set of nodes
 
         :param return_internal_id:  Flag indicating whether to also include the Neo4j internal node ID in the returned data
                                     (using "internal_id" as its key in the returned dictionary)
@@ -725,8 +726,8 @@ class NeoAccess:
         Similar to get_nodes(), but with fewer arguments - and the result is returned as a Pandas dataframe
 
         [See get_nodes() for more information about the arguments]
-        :param match:       EITHER an integer with a Neo4j node id,
-                                OR a dictionary of data to identify a node, or set of nodes, as returned by match()
+        :param match:       EITHER an integer with an internal database node id,
+                                OR a "NodeSpecs" object, as returned by match(), with data to identify a node or set of nodes
         :param order_by:    Optional string with the key (field) name to order by, in ascending order
                                 Note: lower and uppercase names are treated differently in the sort order
         :param limit:       Optional integer to specify the maximum number of nodes returned
@@ -787,7 +788,7 @@ class NeoAccess:
         """
         return NodeSpecs(internal_id=internal_id,
                          labels=labels, key_name=key_name, key_value=key_value,
-                         properties=properties, clause=clause, dummy_node_name=dummy_node_name)
+                         properties=properties, clause=clause, clause_dummy_name=dummy_node_name)
 
 
 
@@ -798,7 +799,8 @@ class NeoAccess:
 
         If not found, or if more than 1 found, an Exception is raised
 
-        :param match:   A dictionary of data to identify a single node, as returned by match()
+        :param match:   EITHER an integer with an internal database node id,
+                            OR a "NodeSpecs" object, as returned by match(), with data to identify a node or set of nodes
         :return:        An integer with the internal database ID of the located node,
                         if exactly 1 node is found; otherwise, raise an Exception
         """
@@ -1418,7 +1420,7 @@ class NeoAccess:
         Return the number of nodes deleted.
 
         :param match:   EITHER an integer with an internal database node id,
-                            OR a dictionary of data to identify a node, or set of nodes, as returned by match()
+                            OR a "NodeSpecs" object, as returned by match(), with data to identify a node or set of nodes
         :return:        The number of nodes deleted (possibly zero)
         """
         # Create the "processed-match dictionaries"
@@ -1554,8 +1556,8 @@ class NeoAccess:
         TODO: if any field is blank, offer the option drop it altogether from the node,
               with a "REMOVE n.field" statement in Cypher; doing SET n.field = "" doesn't drop it
 
-        :param match:       EITHER an integer with a Neo4j node id,
-                                OR a dictionary of data to identify a node, or set of nodes, as returned by match()
+        :param match:       EITHER an integer with an internal database node id,
+                                OR a "NodeSpecs" object, as returned by match(), with data to identify a node or set of nodes
         :param set_dict:    A dictionary of field name/values to create/update the node's attributes
                             (note: blanks ARE allowed in the keys)
 
@@ -1642,12 +1644,12 @@ class NeoAccess:
               (Unclear what multiple calls would do in this case: update the props or create a new relationship??)
 
         :param match_from:  EITHER an integer with an internal database node id,
-                                OR a "NodeSpecs" object with data to identify a node, or set of nodes, as returned by match()
+                                OR a "NodeSpecs" object, as returned by match(), with data to identify a node or set of nodes
         :param match_to:    EITHER an integer with an internal database node id,
-                                 OR a "NodeSpecs" object with data to identify a node, or set of nodes, as returned by match()
+                                OR a "NodeSpecs" object, as returned by match(), with data to identify a node or set of nodes
                             Note: match_from and match_to, if created by calls to match(),
-                                  in scenarios where a dummy name is actually used (e.g. involving clauses),
-                                  MUST use different node dummy names.
+                                  in scenarios where a clause dummy name is actually used,
+                                  MUST use different clause dummy names.
 
         :param rel_name:    The name to give to all the new relationships between the 2 specified nodes, or sets or nodes.
                                 Blanks allowed.
@@ -1746,15 +1748,13 @@ class NeoAccess:
                         Neo4j allows multiple relationships with the same name between the same two nodes,
                         as long as the relationships differ in their properties
 
-        :param match_from:  EITHER an integer with a Neo4j node id,
-                                OR a dictionary of data to identify a node, or set of nodes, as returned by match()
-        :param match_to:    EITHER an integer with a Neo4j node id,
-                                OR a dictionary of data to identify a node, or set of nodes, as returned by match()
+        :param match_from:  EITHER an integer with an internal database node id,
+                                OR a "NodeSpecs" object, as returned by match(), with data to identify a node or set of nodes
+        :param match_to:    EITHER an integer with an internal database node id,
+                                OR a "NodeSpecs" object, as returned by match(), with data to identify a node or set of nodes
                             Note: match_from and match_to, if created by calls to match(),
-                                  in scenarios where a dummy name is used,
-                                  MUST use different node dummy names;
-                                  e.g., make sure that for match_from, match() used the option: dummy_node_name="from"
-                                                     and for match_to, match() used the option: dummy_node_name="to"
+                                  in scenarios where a clause dummy name is actually used,
+                                  MUST use different clause dummy names.
 
         :param rel_name:    (OPTIONAL) The name of the relationship to delete between the 2 specified nodes;
                                 if None or a blank string, all relationships between those 2 nodes will get deleted.
@@ -1817,15 +1817,13 @@ class NeoAccess:
         from and to the nodes (individual nodes or set of nodes) specified in the first two arguments.
         Typically used to find whether 2 given nodes have a direct link between them.
 
-        :param match_from:  EITHER an integer with a Neo4j node id,
-                                OR a dictionary of data to identify a node, or set of nodes, as returned by match()
-        :param match_to:    EITHER an integer with a Neo4j node id,
-                                OR a dictionary of data to identify a node, or set of nodes, as returned by match()
+        :param match_from:  EITHER an integer with an internal database node id,
+                                OR a "NodeSpecs" object, as returned by match(), with data to identify a node or set of nodes
+        :param match_to:    EITHER an integer with an internal database node id,
+                                OR a "NodeSpecs" object, as returned by match(), with data to identify a node or set of nodes
                             Note: match_from and match_to, if created by calls to match(),
-                                  in scenarios where a dummy name is used,
-                                  MUST use different node dummy names;
-                                  e.g., make sure that for match_from, match() used the option: dummy_node_name="from"
-                                                     and for match_to, match() used the option: dummy_node_name="to"
+                                  in scenarios where a clause dummy name is actually used,
+                                  MUST use different clause dummy names.
 
         :param rel_name:    The name of the relationship to look for between the 2 specified nodes.
                                 Blanks are allowed
@@ -1841,15 +1839,13 @@ class NeoAccess:
         Return the number of links (aka edges, relationships) with the specified name exist in the direction
         from and to the nodes (individual nodes or set of nodes) specified in the first two arguments.
 
-        :param match_from:  EITHER an integer with a Neo4j node id,
-                                OR a dictionary of data to identify a node, or set of nodes, as returned by match()
-        :param match_to:    EITHER an integer with a Neo4j node id,
-                                OR a dictionary of data to identify a node, or set of nodes, as returned by match()
+        :param match_from:  EITHER an integer with an internal database node id,
+                                OR a "NodeSpecs" object, as returned by match(), with data to identify a node or set of nodes
+        :param match_to:    EITHER an integer with an internal database node id,
+                                OR a "NodeSpecs" object, as returned by match(), with data to identify a node or set of nodes
                             Note: match_from and match_to, if created by calls to match(),
-                                  in scenarios where a dummy name is used,
-                                  MUST use different node dummy names;
-                                  e.g., make sure that for match_from, match() used the option: dummy_node_name="from"
-                                                     and for match_to, match() used the option: dummy_node_name="to"
+                                  in scenarios where a clause dummy name is actually used,
+                                  MUST use different clause dummy names.
 
         :param rel_name:    The name of the relationship to look for between the 2 specified nodes or groups of nodes.
                                 Blanks are allowed
@@ -2025,8 +2021,8 @@ class NeoAccess:
         into/from neighbor nodes (optionally having the given labels),
         and return all the properties of those neighbor nodes.
 
-        :param match:           EITHER an integer with a Neo4j node id,
-                                    OR a dictionary of data to identify a node, or set of nodes, as returned by match()
+        :param match:           EITHER an integer with an internal database node id,
+                                    OR a "NodeSpecs" object, as returned by match(), with data to identify a node or set of nodes
         :param rel_name:        A string with the name of relationship to follow.  (Note: any other relationships are ignored)
         :param rel_dir:         Either "OUT"(default), "IN" or "BOTH".  Direction(s) of the relationship to follow
         :param neighbor_labels: Optional label(s) required on the neighbors.  If present, either a string or list of strings
@@ -2068,8 +2064,8 @@ class NeoAccess:
         From the given starting node(s), count all the relationships OF THE GIVEN NAME to and/or from it,
         into/from neighbor nodes (optionally having the given labels)
 
-        :param match:           EITHER an integer with a Neo4j node id,
-                                    OR a dictionary of data to identify a node, or set of nodes, as returned by match()
+        :param match:           EITHER an integer with an internal database node id,
+                                    OR a "NodeSpecs" object, as returned by match(), with data to identify a node or set of nodes
         :param rel_name:        A string with the name of relationship to follow.  (Note: any other relationships are ignored)
         :param rel_dir:         Either "OUT"(default), "IN" or "BOTH".  Direction(s) of the relationship to follow
         :param neighbor_labels: Optional label(s) required on the neighbors.  If present, either a string or list of strings

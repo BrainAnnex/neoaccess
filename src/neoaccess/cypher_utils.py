@@ -3,22 +3,28 @@ from typing import Union
 
 class NodeSpecs:
     """
-    Storing all the passed specifications (the "RAW match structure"),
+    Helper class for the class "NeoAccess".
+    Meant as a PRIVATE class for NeoAccess; not indicated for the end user.
+    
+    Validates and stores all the passed specifications (the "RAW match structure"),
     used to identify a node or group of nodes.
 
-    IMPORTANT:  if internal_id is provided, all other conditions are DISREGARDED;
-                if missing, an implicit AND applies to all the specified conditions.    TODO: is this really true?
+    Note:   NO database operation is actually performed
 
-    Note:   NO database operation is actually performed by this function.
+    IMPORTANT:  By our convention -
+                    if internal_id is provided, all other conditions are DISREGARDED;
+                    if it's missing, an implicit AND operation applies to all the specified conditions
     """
 
     def __init__(self, internal_id=None,
                  labels=None, key_name=None, key_value=None,
-                 properties=None, clause=None, dummy_node_name="n"):
+                 properties=None,
+                 clause=None, clause_dummy_name="n"):
         """
         ALL THE ARGUMENTS ARE OPTIONAL (no arguments at all means "match everything in the database")
+
         :param internal_id: An integer with the node's internal database ID.
-                                If specified, it OVER-RIDES all the remaining arguments [except for the labels (TODO: revisit this)]
+                                If specified, it will lead to all the remaining arguments being DISREGARDED (though saved)
 
         :param labels:      A string (or list/tuple of strings) specifying one or more Neo4j labels.
                                 (Note: blank spaces ARE allowed in the strings)
@@ -26,7 +32,6 @@ class NodeSpecs:
                                             ("cars", "powered vehicles")
                             Note that if multiple labels are given, then only nodes with ALL of them will be matched;
                             at present, there's no way to request an "OR" operation
-
 
         :param key_name:    A string with the name of a node attribute; if provided, key_value must be present, too
         :param key_value:   The required value for the above key; if provided, key_name must be present, too
@@ -44,9 +49,8 @@ class NodeSpecs:
                                 EXAMPLES:   "n.age < 25 AND n.income > 100000"
                                             ("n.weight < $max_weight", {"max_weight": 100})
 
-        :param dummy_node_name: A string with a name by which to refer to the node (by default, "n");
+        :param clause_dummy_name: A string with a name by which to refer to the node (by default, "n");
                                 only used if a `clause` argument is passed (in the absence of a clause, it's stored as None)
-
         """
         # Validate all the passed arguments
         if internal_id is not None:
@@ -73,7 +77,7 @@ class NodeSpecs:
 
 
         if clause is None:
-            dummy_node_name = None      # In this scenario, the dummy name isn't yet used, and any name could be used
+            clause_dummy_name = None      # In this scenario, the dummy name isn't yet used, and any name could be used
 
 
         # The following group of object variables can be thought of as
@@ -84,7 +88,8 @@ class NodeSpecs:
         self.key_value = key_value
         self.properties = properties
         self.clause = clause
-        self.dummy_node_name = dummy_node_name  # TODO: change to clause_dummy_name
+        self.clause_dummy_name = clause_dummy_name
+
 
 
     def __str__(self):
@@ -95,14 +100,61 @@ class NodeSpecs:
                 f"    key_value: {self.key_value}" \
                 f"    properties: {self.properties}" \
                 f"    clause: {self.clause}" \
-                f"    dummy_node_name: {self.dummy_node_name}"
+                f"    clause_dummy_name: {self.clause_dummy_name}"
 
 
+
+
+######################################################################################################################
 
 class CypherMatch:
+    """
+    Helper class for the class "NeoAccess".
+    Meant as a PRIVATE class for NeoAccess; not indicated for the end user.
+    
+    Objects of this class (sometimes referred to as a "processed match structures") 
+    are used to facilitate for a user to specify a node in a wide variety of way - and
+    save those specifications, in a "pre-digested" way, to use as needed in Cypher queries.
+    
+    They store the following 4 properties:
 
+        1) "node":  a string, defining a node in a Cypher query, *excluding* the "MATCH" keyword
+        2) "where": a string, defining the "WHERE" part of the subquery (*excluding* the "WHERE"), if applicable;
+                    otherwise, a blank
+        3) "data_binding":      a (possibly empty) data-binding dictionary
+        4) "dummy_node_name":   a string used for the node name inside the Cypher query (by default, "n");
+                                potentially relevant to the "node" and "where" values
+
+        EXAMPLES (shown as dict's):
+            *   {"node": "(n  )" , "where": "" , "data_binding": {}, "dummy_node_name": "n"}
+            *   {"node": "(p :`person` )" , "where": "" , "data_binding": {}, "dummy_node_name": "p"}
+            *   {"node": "(n  )" , "where": "id(n) = 123" , "data_binding": {}, "dummy_node_name": "n"}
+            *   {"node": "(n :`car`:`surplus inventory` )" ,
+                 "where": "" ,
+                 "data_binding": {},
+                 "dummy_node_name": "n"}
+            *   {"node": "(n :`person` {`gender`: $n_par_1, `age`: $n_par_2})",
+                 "where": "",
+                 "data_binding": {"n_par_1": "F", "n_par_2": 22},
+                 "dummy_node_name": "n"}
+            *   {"node": "(n :`person` {`gender`: $n_par_1, `age`: $n_par_2})",
+                 "where": "n.income > 90000 OR n.state = 'CA'",
+                 "data_binding": {"n_par_1": "F", "n_par_2": 22},
+                 "dummy_node_name": "n"}
+            *   {"node": "(n :`person` {`gender`: $n_par_1, `age`: $n_par_2})",
+                 "where": "n.income > $min_income",
+                 "data_binding": {"n_par_1": "F", "n_par_2": 22, "min_income": 90000},
+                 "dummy_node_name": "n"}
+    
+    """
+    
     def __init__(self, node_specs, dummy_node_name_if_missing=None):
-
+        """
+        
+        :param node_specs:                  Object of type "NodeSpecs"
+        :param dummy_node_name_if_missing:  String that will be used ONLY if the object passed to in node_specs
+                                                lacks that attribute
+        """
         internal_id=node_specs.internal_id
         labels=node_specs.labels
         key_name=node_specs.key_name
@@ -112,12 +164,13 @@ class CypherMatch:
 
         # If a value is already present in the raw match structure,
         # it takes priority
-        if node_specs.dummy_node_name is None:
+        if node_specs.clause_dummy_name is None:
             dummy_node_name = dummy_node_name_if_missing
         else:
-            dummy_node_name = node_specs.dummy_node_name
+            dummy_node_name = node_specs.clause_dummy_name
 
-        assert dummy_node_name is not None, "The class `CypherMatch` cannot be instantiated with a missing dummy none name"
+        assert dummy_node_name is not None, \
+            "The class `CypherMatch` cannot be instantiated with a missing dummy none name"
 
         # Turn labels (string or list/tuple of strings) into a string suitable for inclusion into Cypher
         cypher_labels = CypherUtils.prepare_labels(labels)      # EXAMPLES:     ":`patient`"
@@ -127,7 +180,6 @@ class CypherMatch:
                                         # CAUTION: internal_id might be 0 ; that's a valid Neo4j node ID
             cypher_match = f"({dummy_node_name})"
             cypher_where = f"id({dummy_node_name}) = {internal_id}"
-            #return {"node": cypher_match, "where": cypher_where, "data_binding": {}, "dummy_node_name": dummy_node_name}
             self.node = cypher_match
             self.where = cypher_where
             self.data_binding = {}
@@ -201,7 +253,6 @@ class CypherMatch:
         if cypher_clause:
             cypher_clause = cypher_clause.strip()           # Zap any leading/trailing blanks
 
-        #match_structure = {"node": cypher_match, "where": cypher_clause, "data_binding": cypher_dict, "dummy_node_name": dummy_node_name}
 
         self.node = cypher_match
         self.where = cypher_clause
@@ -220,7 +271,7 @@ class CypherMatch:
 
     def extract_node(self) -> str:
         """
-        Return the node information
+        Return the node information to be used in Cypher queries
 
         :return:        A string with the node information.  EXAMPLES:
                             "(n  )"
@@ -233,16 +284,16 @@ class CypherMatch:
 
     def extract_dummy_name(self) -> str:
         """
-        Return the dummy_node_name
+        Return the dummy_node_name to be used in Cypher queries
 
-        :return:        A string with the dummy node name (often "n", or "to, or "from")
+        :return:        A string with the dummy node name (often "n" , or "to" , or "from")
         """
         return self.dummy_node_name
 
 
     def unpack_match(self) -> list:
         """
-        Turn the passed "match" CypherMatch object into a list containing:
+        Return a list containing:
         [node, where, data_binding, dummy_node_name]
 
         TODO:   maybe gradually phase out, as more advanced util methods
@@ -256,51 +307,28 @@ class CypherMatch:
 
 
 
+    def assert_valid_structure(self) -> None:
+        """
+        Verify that the object is a valid one (i.e., correctly initialized); if not, raise an Exception
+        TODO: NOT IN CURRENT USE.  Perhaps to phase out, or tighten the tests
+
+        :return:        None
+        """
+        assert type(self.node) == str, "the `node` attribute is not a string, as expected"
+        assert type(self.where) == str, f"the `where` attribute is not a string, as expected; instead, it is {self.where}"
+        assert type(self.data_binding) == dict, "the `data_binding` attribute is not a dictionary, as expected"
+        assert type(self.dummy_node_name) == str, "the `dummy_node_name` attribute is not a string, as expected"
 
 
-#########################################################################################3
+
+
+######################################################################################################################
+
 class CypherUtils:
     """
-    Helper class for the class "NeoAccess".
-
-    Most of it, is used for node-matching utilizing the "processed match structure", defined below.
-
+    Helper STATIC class for the class "NeoAccess".
     Meant as a PRIVATE class for NeoAccess; not indicated for the end user.
-
-    A "processed match structure" (a dict) is used to facilitate for a user to specify a node in a wide variety of way - and
-    save those specifications, in a "pre-digested" way, to use as needed in Cypher queries.
-    It is a Python dictionary with UP TO the following 4 keys (not all are necessarily present):
-
-            1) "node": a string, defining a node in a Cypher query, *excluding* the "MATCH" keyword
-            2) "where": a string, defining the "WHERE" part of the subquery (*excluding* the "WHERE"), if applicable;
-                        otherwise, a blank
-            3) "data_binding": a (possibly empty) data-binding dictionary
-            4) "dummy_node_name": a string used for the node name inside the Cypher query (by default, "n");
-                                  potentially relevant to the "node" and "where" values
-
-
-        EXAMPLES:
-            *   {"node": "(n  )" , "where": "" , "data_binding": {}, "dummy_node_name": "n"}
-            *   {"node": "(p :`person` )" , "where": "" , "data_binding": {}, "dummy_node_name": "p"}
-            *   {"node": "(n  )" , "where": "id(n) = 123" , "data_binding": {}, "dummy_node_name": "n"}
-            *   {"node": "(n :`car`:`surplus inventory` )" ,
-                 "where": "" ,
-                 "data_binding": {},
-                 "dummy_node_name": "n"}
-            *   {"node": "(n :`person` {`gender`: $n_par_1, `age`: $n_par_2})",
-                 "where": "",
-                 "data_binding": {"n_par_1": "F", "n_par_2": 22},
-                 "dummy_node_name": "n"}
-            *   {"node": "(n :`person` {`gender`: $n_par_1, `age`: $n_par_2})",
-                 "where": "n.income > 90000 OR n.state = 'CA'",
-                 "data_binding": {"n_par_1": "F", "n_par_2": 22},
-                 "dummy_node_name": "n"}
-            *   {"node": "(n :`person` {`gender`: $n_par_1, `age`: $n_par_2})",
-                 "where": "n.income > $min_income",
-                 "data_binding": {"n_par_1": "F", "n_par_2": 22, "min_income": 90000},
-                 "dummy_node_name": "n"}
     """
-
 
     @classmethod
     def process_match_structure(cls, handle: Union[int, NodeSpecs], dummy_node_name="n") -> CypherMatch:
@@ -310,7 +338,7 @@ class CypherUtils:
         :param dummy_node_name:
         :return:
         """
-        if cls.validate_internal_id(handle):
+        if cls.validate_internal_id(handle):    # If the argument "handle" is a valid internal database ID
             node_specs = NodeSpecs(internal_id=handle)
             return CypherMatch(node_specs, dummy_node_name_if_missing=dummy_node_name)
 
@@ -373,7 +401,7 @@ class CypherUtils:
 
 
 
-    ############ The following methods make no reference to any "match" object (neither NodeSpecs nor CypherMatch)
+    ############ The following methods make no reference to any "match" object (neither NodeSpecs nor CypherMatch objects)
 
     @classmethod
     def assert_valid_internal_id(cls, internal_id: int) -> None:
@@ -523,60 +551,3 @@ class CypherUtils:
         rel_props_str = "{" + rel_props_str + "}"
 
         return (rel_props_str, data_binding)
-
-
-
-
-    ############  POTENTIALLY OBSOLETE
-
-    # TODO: NOT IN CURRENT USE
-    @classmethod
-    def validate_and_standardize(cls, match: Union[int, CypherMatch], dummy_node_name="n") -> CypherMatch:
-        """
-        If match is a non-negative integer, it's assumed to be a Neo4j ID, and a match dictionary is created and returned.
-        Otherwise, verify that an alleged "match" dictionary is a valid one:
-        if yes, return it back; if not, raise an Exception
-
-        TIP:
-              Calling methods that accept "match" arguments can have a line such as:
-                    match = CypherUtils.validate_and_standardize(match)
-              and, at that point, they will be automatically also accepting Neo4j IDs as "matches"
-
-        TODO: also, accept as argument a list/tuple - and, in addition to the above ops, carry out checks for compatibilities
-
-        :param match:           Either a valid Neo4j internal ID, or a "match" dictionary (TODO: or a list/tuple of those)
-        :param dummy_node_name: A string with a name by which to refer to the node (by default, "n");
-                                    note: this is only used if the `match` argument is a valid Neo4j internal ID
-
-        :return:                A valid "match" structure, i.e. a dictionary of data to identify a node, or set of nodes
-        """
-        if type(match) == int and match >= 0:       # If the argument "match" is a valid Neo4j ID
-            return CypherMatch(internal_id=match, dummy_node_name=dummy_node_name)
-
-        cls.assert_valid_match_structure(match)
-        return match
-
-
-    # TODO: NOT IN CURRENT USE
-    @classmethod
-    def assert_valid_match_structure(cls, match: CypherMatch) -> None:
-        """
-        Verify that an alleged "match" dictionary is a valid one; if not, raise an Exception
-        TODO: tighten up the checks
-
-        :param match:   A dictionary of data to identify a node, or set of nodes, as returned by match()
-        :return:        None
-        """
-        assert type(match) == dict, f"`match` argument is not a dictionary as expected; instead, it is a {type(match)}"
-
-        assert len(match) == 4, f"the `match` dictionary does not contain the expected 4 entries; instead, it has {len(match)}"
-
-        assert "node" in match, "the `match` dictionary does not contain the expected 'node' key"
-        assert "where" in match, "the `match` dictionary does not contain the expected 'where' key"
-        assert "data_binding" in match, "the `match` dictionary does not contain the expected 'data_binding' key"
-        assert "dummy_node_name" in match, "the `match` dictionary does not contain the expected 'dummy_node_name' key"
-
-        assert type(match["node"]) == str, "the `node` entry in the `match` dictionary is not a string, as expected"
-        assert type(match["where"]) == str, f"the `where` entry in the `match` dictionary is not a string, as expected; instead, it is {match['where']}"
-        assert type(match["data_binding"]) == dict, "the `data_binding` entry in the `match` dictionary is not a dictionary, as expected"
-        assert type(match["dummy_node_name"]) == str, "the `dummy_node_name` entry in the `match` dictionary is not a string, as expected"
