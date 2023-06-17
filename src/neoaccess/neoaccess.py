@@ -677,7 +677,7 @@ class NeoAccess:
             print("    match_structure:", match_structure)
 
         # Unpack needed values from the match dictionary
-        (node, where, data_binding, dummy_node_name) = CypherUtils.unpack_match(match_structure)
+        (node, where, data_binding, dummy_node_name) = match_structure.unpack_match()
 
         cypher = f"MATCH {node} {CypherUtils.prepare_where(where)} RETURN {dummy_node_name}"
 
@@ -809,7 +809,7 @@ class NeoAccess:
             print("    match_structure:", match_structure)
 
         # Unpack needed values from the match dictionary
-        (node, where, data_binding) = CypherUtils.unpack_match(match_structure, include_dummy=False)
+        (node, where, data_binding, _) = match_structure.unpack_match()
 
         q = f"MATCH {node} {CypherUtils.prepare_where(where)} RETURN id(n) AS INTERNAL_ID"
         self.debug_query_print(q, data_binding, "get_node_internal_id")
@@ -1429,7 +1429,7 @@ class NeoAccess:
             print("    match_structure:", match_structure)
 
         # Unpack needed values from the match dictionary
-        (node, where, data_binding) = CypherUtils.unpack_match(match_structure, include_dummy=False)
+        (node, where, data_binding, _) = match_structure.unpack_match()
 
         q = f"MATCH {node} {CypherUtils.prepare_where(where)} DETACH DELETE n"
         self.debug_query_print(q, data_binding, "delete_nodes")
@@ -1572,7 +1572,7 @@ class NeoAccess:
             print("    match_structure:", match_structure)
 
         # Unpack needed values from the match dictionary
-        (node, where, data_binding, dummy_node_name) = CypherUtils.unpack_match(match_structure)
+        (node, where, data_binding, dummy_node_name) = match_structure.unpack_match()
 
         cypher_match = f"MATCH {node} {CypherUtils.prepare_where(where)} "
 
@@ -1667,14 +1667,14 @@ class NeoAccess:
         CypherUtils.check_match_compatibility(cypher_match_from, cypher_match_to)
 
         # Unpack needed values from the cypher_match_from and cypher_match_to structures
-        nodes_from = CypherUtils.extract_node(cypher_match_from)
-        nodes_to   = CypherUtils.extract_node(cypher_match_to)
+        nodes_from = cypher_match_from.extract_node()
+        nodes_to   = cypher_match_to.extract_node()
 
-        where_clause = CypherUtils.combined_where([cypher_match_from, cypher_match_to])   # Combine the two WHERE clauses from each of the matches,
-        # and also prefix (if appropriate) the WHERE keyword
+        where_clause = CypherUtils.combined_where([cypher_match_from, cypher_match_to]) # Combine the two WHERE clauses from each of the matches,
+                                                                                        # and also prefix (if appropriate) the WHERE keyword
 
-        from_dummy_name = CypherUtils.extract_dummy_name(cypher_match_from)
-        to_dummy_name = CypherUtils.extract_dummy_name(cypher_match_to)
+        from_dummy_name = cypher_match_from.extract_dummy_name()
+        to_dummy_name = cypher_match_to.extract_dummy_name()
 
         # Prepare the query to add the requested links between the given nodes (possibly, sets of nodes)
         q = f'''
@@ -1775,8 +1775,8 @@ class NeoAccess:
         CypherUtils.check_match_compatibility(match_from, match_to)
 
         # Unpack needed values from the match_from and match_to structures
-        nodes_from = CypherUtils.extract_node(match_from)
-        nodes_to   = CypherUtils.extract_node(match_to)
+        nodes_from = match_from.extract_node()
+        nodes_to   = match_to.extract_node()
 
         where_clause = CypherUtils.combined_where([match_from, match_to])   # Combine the two WHERE clauses from each of the matches,
         # and also prefix (if appropriate) the WHERE keyword
@@ -1868,8 +1868,8 @@ class NeoAccess:
         CypherUtils.check_match_compatibility(match_from, match_to)
 
         # Unpack needed values from the match_from and match_to structures
-        nodes_from = CypherUtils.extract_node(match_from)
-        nodes_to   = CypherUtils.extract_node(match_to)
+        nodes_from = match_from.extract_node()
+        nodes_to   = match_to.extract_node()
 
         where_clause = CypherUtils.combined_where([match_from, match_to])   # Combine the two WHERE clauses from each of the matches,
         # and also prefix (if appropriate) the WHERE keyword
@@ -2041,7 +2041,7 @@ class NeoAccess:
             print("    match_structure:", match_structure)
 
         # Unpack needed values from the match dictionary
-        (node, where, data_binding) = CypherUtils.unpack_match(match_structure, include_dummy=False)
+        (node, where, data_binding, _) = match_structure.unpack_match()
 
         neighbor_labels_str = CypherUtils.prepare_labels(neighbor_labels)     # EXAMPLE:  ":`CAR`:`INVENTORY`"
 
@@ -2083,7 +2083,7 @@ class NeoAccess:
             print("    match_structure:", match_structure)
 
         # Unpack needed values from the match dictionary
-        (node, where, data_binding) = CypherUtils.unpack_match(match_structure, include_dummy=False)
+        (node, where, data_binding, _) = match_structure.unpack_match()
 
         neighbor_labels_str = CypherUtils.prepare_labels(neighbor_labels)     # EXAMPLE:  ":`CAR`:`INVENTORY`"
 

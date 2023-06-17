@@ -218,6 +218,46 @@ class CypherMatch:
 
 
 
+    def extract_node(self) -> str:
+        """
+        Return the node information
+
+        :return:        A string with the node information.  EXAMPLES:
+                            "(n  )"
+                            "(p :`person` )"
+                            "(n :`car`:`surplus inventory` )"
+                            "(n :`person` {`gender`: $n_par_1, `age`: $n_par_2})"
+        """
+        return self.node
+
+
+    def extract_dummy_name(self) -> str:
+        """
+        Return the dummy_node_name
+
+        :return:        A string with the dummy node name (often "n", or "to, or "from")
+        """
+        return self.dummy_node_name
+
+
+    def unpack_match(self) -> list:
+        """
+        Turn the passed "match" CypherMatch object into a list containing:
+        [node, where, data_binding, dummy_node_name]
+
+        TODO:   maybe gradually phase out, as more advanced util methods
+                make the unpacking of all the "match" internal structure unnecessary.
+
+        :return:                A list containing [node, where, data_binding, dummy_node_name]
+        """
+        match_as_list = [self.node, self.where , self.data_binding, self.dummy_node_name]
+
+        return match_as_list
+
+
+
+
+
 #########################################################################################3
 class CypherUtils:
     """
@@ -293,64 +333,6 @@ class CypherUtils:
             f"check_match_compatibility(): conflict between 2 matches " \
             f"using the same dummy node name ({match1.dummy_node_name}). " \
             f"Make sure to pass different dummy names"
-
-
-
-    @classmethod
-    def extract_node(cls, match: CypherMatch) -> str:
-        """
-        Return the node information from the given "CypherMatch" object
-
-        :param match:   A dictionary, as created by CypherMatch()
-        :return:        A string with the node information.  EXAMPLES:
-                            "(n  )"
-                            "(p :`person` )"
-                            "(n :`car`:`surplus inventory` )"
-                            "(n :`person` {`gender`: $n_par_1, `age`: $n_par_2})"
-        """
-        return match.node
-
-
-    @classmethod
-    def extract_dummy_name(cls, match: CypherMatch) -> str:
-        """
-        Return the dummy_node_name from the given "match" data structure
-
-        :param match:   A dictionary, as created by CypherMatch()
-        :return:        A string with the dummy node name (often "n", or "to, or "from")
-        """
-        return match.dummy_node_name
-
-
-
-    @classmethod
-    def unpack_match(cls, match: CypherMatch, include_dummy=True) -> list:
-        """
-        Turn the passed "match" CypherMatch object into a list containing:
-        [node, where, data_binding, dummy_node_name]
-        or
-        [node, where, data_binding]
-        depending on the include_dummy flag
-
-        TODO:   gradually phase out, as more advanced util methods
-                make the unpacking of all the "match" internal structure unnecessary
-                Maybe switch default value for include_dummy to False...
-
-        :param match:           A dictionary, as created by CypherMatch()
-        :param include_dummy:   Flag indicating whether to also include the "dummy_node_name" value, as a 4th element in the returned list
-        :return:
-        """
-        match_as_list = [match.node, match.where , match.data_binding]
-        if include_dummy:
-            match_as_list.append(match.dummy_node_name)
-
-        '''
-        if include_dummy:
-            match_as_list = [match.get(key) for key in ["node", "where", "data_binding", "dummy_node_name"]]
-        else:
-            match_as_list = [match.get(key) for key in ["node", "where", "data_binding"]]
-        '''
-        return match_as_list
 
 
 
