@@ -1,6 +1,3 @@
-####  WARNING : the database will get erased!!!
-
-
 import pytest
 from src.neoaccess.cypher_utils import CypherUtils
 

@@ -1,7 +1,6 @@
 from typing import Union
 
 
-
 class NodeSpecs:
     """
     Storing all the passed specifications (the "RAW match structure"),
@@ -90,104 +89,23 @@ class NodeSpecs:
 
 
 class CypherMatch:
-    pass
 
+    def __init__(self, labels=None, internal_id=None, key_name=None, key_value=None, properties=None, subquery=None, dummy_node_name="n"):
 
-
-#########################################################################################3
-class CypherUtils:
-    """
-    Helper class for the class "NeoAccess".
-
-    Most of it, is used for node-matching utilizing the "processed match structure", defined below.
-
-    Meant as a PRIVATE class for NeoAccess; not indicated for the end user.
-
-    A "processed match structure" (a dict) is used to facilitate for a user to specify a node in a wide variety of way - and
-    save those specifications, in a "pre-digested" way, to use as needed in Cypher queries.
-    It is a Python dictionary with UP TO the following 4 keys (not all are necessarily present):
-
-            1) "node": a string, defining a node in a Cypher query, *excluding* the "MATCH" keyword
-            2) "where": a string, defining the "WHERE" part of the subquery (*excluding* the "WHERE"), if applicable;
-                        otherwise, a blank
-            3) "data_binding": a (possibly empty) data-binding dictionary
-            4) "dummy_node_name": a string used for the node name inside the Cypher query (by default, "n");
-                                  potentially relevant to the "node" and "where" values
-
-
-        EXAMPLES:
-            *   {"node": "(n  )" , "where": "" , "data_binding": {}, "dummy_node_name": "n"}
-            *   {"node": "(p :`person` )" , "where": "" , "data_binding": {}, "dummy_node_name": "p"}
-            *   {"node": "(n  )" , "where": "id(n) = 123" , "data_binding": {}, "dummy_node_name": "n"}
-            *   {"node": "(n :`car`:`surplus inventory` )" ,
-                 "where": "" ,
-                 "data_binding": {},
-                 "dummy_node_name": "n"}
-            *   {"node": "(n :`person` {`gender`: $n_par_1, `age`: $n_par_2})",
-                 "where": "",
-                 "data_binding": {"n_par_1": "F", "n_par_2": 22},
-                 "dummy_node_name": "n"}
-            *   {"node": "(n :`person` {`gender`: $n_par_1, `age`: $n_par_2})",
-                 "where": "n.income > 90000 OR n.state = 'CA'",
-                 "data_binding": {"n_par_1": "F", "n_par_2": 22},
-                 "dummy_node_name": "n"}
-            *   {"node": "(n :`person` {`gender`: $n_par_1, `age`: $n_par_2})",
-                 "where": "n.income > $min_income",
-                 "data_binding": {"n_par_1": "F", "n_par_2": 22, "min_income": 90000},
-                 "dummy_node_name": "n"}
-    """
-
-
-    @classmethod
-    def define_match(cls, labels=None, internal_id=None, key_name=None, key_value=None, properties=None, subquery=None,
-                     dummy_node_name="n") -> dict:
-        """
-        Turn the set of specification into the MATCH part, and (if applicable) the WHERE part,
-        of a Cypher query (using the specified dummy variable name),
-        together with its data-binding dictionary.
-
-        The keywords "MATCH" and "WHERE" are *not* returned, to facilitate the assembly of larger Cypher queries
-        that involve multiple matches.
-
-        ALL THE ARGUMENTS ARE OPTIONAL (no arguments at all means "match everything in the database")
-        :param labels:      A string (or list/tuple of strings) specifying one or more Neo4j labels.
-                                (Note: blank spaces ARE allowed in the strings)
-                                EXAMPLES:  "cars"
-                                            ("cars", "vehicles")
-
-        :param internal_id:      An integer with the node's internal ID.
-                                If specified, it OVER-RIDES all the remaining arguments, except for the labels
-
-        :param key_name:    A string with the name of a node attribute; if provided, key_value must be present, too
-        :param key_value:   The required value for the above key; if provided, key_name must be present, too
-                                Note: no requirement for the key to be primary
-
-        :param properties:  A (possibly-empty) dictionary of property key/values pairs, indicating a condition to match.
-                                EXAMPLE: {"gender": "F", "age": 22}
-
-        :param subquery:    Either None, or a (possibly empty) string containing a Cypher subquery,
-                            or a pair/list (string, dict) containing a Cypher subquery and the data-binding dictionary for it.
-                            The Cypher subquery should refer to the node using the assigned dummy_node_name (by default, "n")
-                                IMPORTANT:  in the dictionary, don't use keys of the form "n_par_i",
-                                            where n is the dummy node name and i is an integer,
-                                            or an Exception will be raised - those names are for internal use only
-                                EXAMPLES:   "n.age < 25 AND n.income > 100000"
-                                            ("n.weight < $max_weight", {"max_weight": 100})
-
-        :param dummy_node_name: A string with a name by which to refer to the node (by default, "n")
-
-        :return:            A dictionary of data storing the parameters of the match.
-                            For details, see the info stored in the comments for this Class
-        """
         # Turn labels (string or list/tuple of strings) into a string suitable for inclusion into Cypher
-        cypher_labels = cls.prepare_labels(labels)     # EXAMPLES:     ":`patient`"
-        #               ":`CAR`:`INVENTORY`"
+        cypher_labels = CypherUtils.prepare_labels(labels)      # EXAMPLES:     ":`patient`"
+                                                                #               ":`CAR`:`INVENTORY`"
 
-        if internal_id is not None:      # If an internal node ID is specified, it over-rides all the other conditions
-            # CAUTION: internal_id might be 0 ; that's a valid Neo4j node ID
+        if internal_id is not None:     # If an internal node ID is specified, it over-rides all the other conditions
+                                        # CAUTION: internal_id might be 0 ; that's a valid Neo4j node ID
             cypher_match = f"({dummy_node_name})"
             cypher_where = f"id({dummy_node_name}) = {internal_id}"
-            return {"node": cypher_match, "where": cypher_where, "data_binding": {}, "dummy_node_name": dummy_node_name}
+            #return {"node": cypher_match, "where": cypher_where, "data_binding": {}, "dummy_node_name": dummy_node_name}
+            self.node = cypher_match
+            self.where = cypher_where
+            self.data_binding = {}
+            self.dummy_node_name = dummy_node_name
+            return
 
 
         if key_name and key_value is None:  # CAUTION: key_value might legitimately be 0 or "" (hence the "is None")
@@ -236,7 +154,7 @@ class CypherUtils:
             #               clause_from_properties = "{`gender`: $n_par_1, `year first met`: $n_par_2}"
             #               props_data_binding = {'n_par_1': "F", 'n_par_2': 2003}
 
-            (clause_from_properties, props_data_binding) = cls.dict_to_cypher(properties, prefix=dummy_node_name + "_par_")
+            (clause_from_properties, props_data_binding) = CypherUtils.dict_to_cypher(properties, prefix=dummy_node_name + "_par_")
 
             if not cypher_dict:
                 cypher_dict = props_data_binding        # The properties dictionary is to be used as the only Cypher-binding dictionary
@@ -256,14 +174,63 @@ class CypherUtils:
         if cypher_clause:
             cypher_clause = cypher_clause.strip()           # Zap any leading/trailing blanks
 
-        match_structure = {"node": cypher_match, "where": cypher_clause, "data_binding": cypher_dict, "dummy_node_name": dummy_node_name}
+        #match_structure = {"node": cypher_match, "where": cypher_clause, "data_binding": cypher_dict, "dummy_node_name": dummy_node_name}
 
-        return match_structure
+        self.node = cypher_match
+        self.where = cypher_clause
+        self.data_binding = cypher_dict
+        self.dummy_node_name = dummy_node_name
 
+
+
+
+
+#########################################################################################3
+class CypherUtils:
+    """
+    Helper class for the class "NeoAccess".
+
+    Most of it, is used for node-matching utilizing the "processed match structure", defined below.
+
+    Meant as a PRIVATE class for NeoAccess; not indicated for the end user.
+
+    A "processed match structure" (a dict) is used to facilitate for a user to specify a node in a wide variety of way - and
+    save those specifications, in a "pre-digested" way, to use as needed in Cypher queries.
+    It is a Python dictionary with UP TO the following 4 keys (not all are necessarily present):
+
+            1) "node": a string, defining a node in a Cypher query, *excluding* the "MATCH" keyword
+            2) "where": a string, defining the "WHERE" part of the subquery (*excluding* the "WHERE"), if applicable;
+                        otherwise, a blank
+            3) "data_binding": a (possibly empty) data-binding dictionary
+            4) "dummy_node_name": a string used for the node name inside the Cypher query (by default, "n");
+                                  potentially relevant to the "node" and "where" values
+
+
+        EXAMPLES:
+            *   {"node": "(n  )" , "where": "" , "data_binding": {}, "dummy_node_name": "n"}
+            *   {"node": "(p :`person` )" , "where": "" , "data_binding": {}, "dummy_node_name": "p"}
+            *   {"node": "(n  )" , "where": "id(n) = 123" , "data_binding": {}, "dummy_node_name": "n"}
+            *   {"node": "(n :`car`:`surplus inventory` )" ,
+                 "where": "" ,
+                 "data_binding": {},
+                 "dummy_node_name": "n"}
+            *   {"node": "(n :`person` {`gender`: $n_par_1, `age`: $n_par_2})",
+                 "where": "",
+                 "data_binding": {"n_par_1": "F", "n_par_2": 22},
+                 "dummy_node_name": "n"}
+            *   {"node": "(n :`person` {`gender`: $n_par_1, `age`: $n_par_2})",
+                 "where": "n.income > 90000 OR n.state = 'CA'",
+                 "data_binding": {"n_par_1": "F", "n_par_2": 22},
+                 "dummy_node_name": "n"}
+            *   {"node": "(n :`person` {`gender`: $n_par_1, `age`: $n_par_2})",
+                 "where": "n.income > $min_income",
+                 "data_binding": {"n_par_1": "F", "n_par_2": 22, "min_income": 90000},
+                 "dummy_node_name": "n"}
+    """
 
 
     @classmethod
-    def process_match_structure(cls, handle: Union[int, NodeSpecs], dummy_node_name="n") -> dict:
+    def process_match_structure(cls, handle: Union[int, NodeSpecs], dummy_node_name="n") -> CypherMatch:
         """
 
         :param handle:
@@ -271,13 +238,13 @@ class CypherUtils:
         :return:
         """
         if cls.validate_internal_id(handle):
-            return cls.define_match(internal_id=handle, dummy_node_name=dummy_node_name)
+            return CypherMatch(internal_id=handle, dummy_node_name=dummy_node_name)
 
         if handle.dummy_node_name is not None:
             dummy_node_name = handle.dummy_node_name    # If a value is already present in the raw match structure,
                                                         # it takes priority
 
-        return cls.define_match(internal_id=handle.internal_id,
+        return CypherMatch(internal_id=handle.internal_id,
                                 labels=handle.labels,
                                 key_name=handle.key_name, key_value=handle.key_value,
                                 properties=handle.properties,
@@ -288,7 +255,7 @@ class CypherUtils:
 
 
     @classmethod
-    def check_match_compatibility(cls, match1: dict, match2: dict) -> None:
+    def check_match_compatibility(cls, match1: CypherMatch, match2: CypherMatch) -> None:
         """
         If the two given PROCESSED match structures are incompatible (in terms of collision in their dummy node name),
         raise an Exception.
@@ -297,44 +264,44 @@ class CypherUtils:
         :param match2:
         :return:        None
         """
-        assert match1.get("dummy_node_name") != match2.get("dummy_node_name"), \
+        assert match1.dummy_node_name != match2.dummy_node_name, \
             f"check_match_compatibility(): conflict between 2 matches " \
-            f"using the same dummy node name ({match1.get('dummy_node_name')}). " \
+            f"using the same dummy node name ({match1.dummy_node_name}). " \
             f"Make sure to pass different dummy names"
 
 
 
     @classmethod
-    def extract_node(cls, match: dict) -> str:
+    def extract_node(cls, match: CypherMatch) -> str:
         """
         Return the node information from the given "match" data structure
 
-        :param match:   A dictionary, as created by define_match()
+        :param match:   A dictionary, as created by CypherMatch()
         :return:        A string with the node information.  EXAMPLES:
                             "(n  )"
                             "(p :`person` )"
                             "(n :`car`:`surplus inventory` )"
                             "(n :`person` {`gender`: $n_par_1, `age`: $n_par_2})"
         """
-        return match.get("node")
+        return match.node
 
 
     @classmethod
-    def extract_dummy_name(cls, match: dict) -> str:
+    def extract_dummy_name(cls, match: CypherMatch) -> str:
         """
         Return the dummy_node_name from the given "match" data structure
 
-        :param match:   A dictionary, as created by define_match()
+        :param match:   A dictionary, as created by CypherMatch()
         :return:        A string with the dummy node name (often "n", or "to, or "from")
         """
-        return match.get("dummy_node_name")
+        return match.dummy_node_name
 
 
 
     @classmethod
-    def unpack_match(cls, match: dict, include_dummy=True) -> list:
+    def unpack_match(cls, match: CypherMatch, include_dummy=True) -> list:
         """
-        Turn the passed "match" dictionary structure into a list containing:
+        Turn the passed "match" CypherMatch object into a list containing:
         [node, where, data_binding, dummy_node_name]
         or
         [node, where, data_binding]
@@ -344,56 +311,62 @@ class CypherUtils:
                 make the unpacking of all the "match" internal structure unnecessary
                 Maybe switch default value for include_dummy to False...
 
-        :param match:           A dictionary, as created by define_match()
+        :param match:           A dictionary, as created by CypherMatch()
         :param include_dummy:   Flag indicating whether to also include the "dummy_node_name" value, as a 4th element in the returned list
         :return:
         """
+        match_as_list = [match.node, match.where , match.data_binding]
+        if include_dummy:
+            match_as_list.append(match.dummy_node_name)
+
+        '''
         if include_dummy:
             match_as_list = [match.get(key) for key in ["node", "where", "data_binding", "dummy_node_name"]]
         else:
             match_as_list = [match.get(key) for key in ["node", "where", "data_binding"]]
-
+        '''
         return match_as_list
 
 
 
     @classmethod
-    def combined_where(cls, match_list: list) -> str:
+    def combined_where(cls, match_list: [CypherMatch]) -> str:
         """
-        Given a list of "match" structures, return the combined version of all their WHERE statements.
+        Given a list of "CypherMatch" objects, return the combined version of all their WHERE statements.
         For details, see prepare_where()
         TODO: Make sure there's no conflict in the dummy node names
 
-        :param match_list:  A list of "match" structures
+        :param match_list:  A list of CypherMatch" objects
         :return:            A string with the combined WHERE statement,
                             suitable for inclusion into a Cypher query (empty if there were no subclauses)
         """
-        where_list = [match.get("where", "") for match in match_list]
+        where_list = [match.where for match in match_list]
         return cls.prepare_where(where_list)
 
 
 
     @classmethod
-    def combined_data_binding(cls, match_list: list) -> dict:
+    def combined_data_binding(cls, match_list: [CypherMatch]) -> dict:
         """
-        Given a list of "match" structures, returned the combined version of all their data binding dictionaries.
+        Given a list of "CypherMatch" objects, returned the combined version of all their data binding dictionaries.
         TODO: Make sure there's no conflicts
         TODO: Since this also works with a 1-element list, it can be use to simply unpack the data binding from the match structure
               (i.e. ought to drop the "combined" from the name)
         """
         first_match = match_list[0]
-        combined_data_binding = first_match.get("data_binding", {})
+        combined_data_binding = first_match.data_binding
 
         for i, match in enumerate(match_list):
             if i != 0:      # Skip the first one, which we already processed above
-                new_data_binding = match.get("data_binding", {})
+                new_data_binding = match.data_binding
                 combined_data_binding.update(new_data_binding)
 
         return combined_data_binding
 
 
 
-    ############ The following methods make no reference to any "match" structure
+
+    ############ The following methods make no reference to any "match" object (neither NodeSpecs nor CypherMatch)
 
     @classmethod
     def assert_valid_internal_id(cls, internal_id: int) -> None:
@@ -571,7 +544,7 @@ class CypherUtils:
         :return:                A valid "match" structure, i.e. a dictionary of data to identify a node, or set of nodes
         """
         if type(match) == int and match >= 0:       # If the argument "match" is a valid Neo4j ID
-            return cls.define_match(internal_id=match, dummy_node_name=dummy_node_name)
+            return CypherMatch(internal_id=match, dummy_node_name=dummy_node_name)
 
         cls.assert_valid_match_structure(match)
         return match
