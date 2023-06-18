@@ -9,50 +9,13 @@ import sys
 import json
 from typing import Union, List
 
-
-
-class NeoAccess:
-    """
-    IMPORTANT : for versions 4.x of the Neo4j database
-
-    High-level class to interface with the Neo4j graph database from Python.
-
-    Mostly tested on versions 4.3 and 4.4 of Neo4j Community version, but should work with other 4.x versions, too.
-    NOT tested on any other major version of Neo4j; in particular, NOT tested with version 5
-
-    Conceptually, there are two parts to NeoAccess:
-        1) A thin wrapper around the Neo4j python connectivity library "Neo4j Python Driver"
-          that is documented at: https://neo4j.com/docs/api/python-driver/current/api.html
-
-        2) A layer above, providing higher-level functionality for common database operations,
-           such as lookup, creation, deletion, modification, import, indices, etc.
-
-    SECTIONS IN THIS CLASS:
-        * INIT
-        * RUNNING GENERIC QUERIES
-        * RETRIEVE DATA
-        * FOLLOW LINKS
-        * CREATE NODES
-        * DELETE NODES
-        * MODIFY FIELDS
-        * RELATIONSHIPS
-        * LABELS
-        * INDEXES
-        * CONSTRAINTS
-        * READ IN DATA from PANDAS
-        * JSON IMPORT/EXPORT
-        * DEBUGGING SUPPORT
-
-    Plus separate classes in the file cypher_utils.py
-
-    TODO: consider splitting into NeoAccessCore and NeoAccess
-
+'''
     ----------------------------------------------------------------------------------
     HISTORY and AUTHORS:
         - NeoAccess (this library) is a fork of NeoInterface;
                 NeoAccess was created, and is being maintained, by Julian West,
                 primarily in the context of the BrainAnnex.org open-source project.
-                It started out in late 2021; for change log thru 2022,
+                It started out in late 2021; for change log thru 2023,
                 see the "LIBRARIES" entries in https://brainannex.org/viewer.php?ac=2&cat=14
 
         - NeoInterface (the parent library)
@@ -70,7 +33,8 @@ class NeoAccess:
 
         Copyright (c) 2021-2023 Julian A. West
 
-        This file is part of the "Brain Annex" project (https://BrainAnnex.org).
+        This file is part of the "Brain Annex" project (https://BrainAnnex.org),
+        though it's released independently.
         See "AUTHORS", above, for full credits.
 
         Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -91,11 +55,27 @@ class NeoAccess:
         OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
         SOFTWARE.
 	----------------------------------------------------------------------------------
+'''
+
+
+class NeoAccessCore:
+    """
+    IMPORTANT : for versions 4.x of the Neo4j database
+
+    A thin wrapper around the Neo4j python connectivity library "Neo4j Python Driver"
+    that is documented at: https://neo4j.com/docs/api/python-driver/current/api.html
+
+    This "CORE" library may be used independently,
+    or as the foundation of the higher-level child class, "NeoAccess"
+
+    SECTIONS IN THIS CLASS:
+        * INIT (constructor) and DATABASE CONNECTION
+        * RUNNING GENERIC CYPHER QUERIES
     """
 
     def __init__(self,
-                 host=os.environ.get("NEO4J_HOST"),
-                 credentials=(os.environ.get("NEO4J_USER"), os.environ.get("NEO4J_PASSWORD")),
+                 host=os.getenv("NEO4J_HOST"),
+                 credentials=(os.getenv("NEO4J_USER"), os.getenv("NEO4J_PASSWORD")),
                  apoc=False,
                  debug=False,
                  autoconnect=True):
@@ -113,8 +93,6 @@ class NeoAccess:
                                 The only method currently requiring APOC is export_dbase_json()
         :param debug:       Flag indicating whether a debug mode is to be used by all methods of this class
         :param autoconnect  Flag indicating whether the class should establish connection to database at initialization
-
-        TODO: try os.getenv() in lieu of os.environ.get()
         """
         self.debug = debug
 
@@ -154,7 +132,8 @@ class NeoAccess:
             # TODO: maybe try to detect that, and give a more informative message
             raise Exception(error_msg)
 
-        self.debug_print(f"Connection to host '{self.host}' established")
+        if self.debug:
+            print(f"Connection to host '{self.host}' established")
 
         # If we get thus far, the connection to the host was successfully established,
         # BUT this doesn't prove that we can actually connect to the database;
@@ -196,7 +175,8 @@ class NeoAccess:
     def close(self) -> None:
         """
         Terminate the database connection.
-        Note: this method is automatically invoked after the last operation of a "with" statement
+        Note: this method is automatically invoked
+              after the last operation included in "with" statements
 
         :return:    None
         """
@@ -205,21 +185,10 @@ class NeoAccess:
 
 
 
-    def assert_valid_internal_id(self, internal_id: int) -> None:
-        """
-        Raise an Exception if the argument is not a valid database internal ID
-
-        :param internal_id: Alleged Neo4j internal database ID
-        :return:            None
-        """
-        CypherUtils.assert_valid_internal_id(internal_id)
-
-
-
 
     #####################################################################################################
 
-    '''                                 ~   RUN GENERIC QUERIES   ~                                   '''
+    '''                          ~   RUN GENERIC CYPHER QUERIES   ~                                   '''
 
     def ________RUN__GENERIC_QUERIES________(DIVIDER):
         pass        # Used to get a better structure view in IDEs
@@ -447,8 +416,9 @@ class NeoAccess:
                                   'returned_data': [{'internal_id': 123}]
                                  } , assuming 123 is the Neo4j internal ID of the newly-created node
 
-        :param cypher:      Any Cypher query, but typically one that doesn't return anything
+        :param cypher:      Any Cypher query, but typically one that doesn't return anything    TODO: change to "q" for consistency
         :param data_binding: Data-binding dictionary for the Cypher query
+
         :return:            A dictionary of statistics (counters) about the query just run
                             EXAMPLES -
                                 {}      The query had no effect
@@ -519,6 +489,67 @@ class NeoAccess:
 
 
 
+
+
+###################################################################################################
+###################################################################################################
+
+class NeoAccess(NeoAccessCore):
+    """
+    IMPORTANT : for versions 4.x of the Neo4j database
+
+    High-level class to interface with the Neo4j graph database from Python.
+
+    Mostly tested on versions 4.3 and 4.4 of Neo4j Community version, but should work with other 4.x versions, too.
+    NOT tested on any other major version of Neo4j; in particular, NOT tested with version 5
+
+    This class is a layer above its parent class "NeoAccessCore",
+        and it provides a higher-level functionality for common database operations,
+        such as lookup, creation, deletion, modification, import, indices, etc.
+
+    SECTIONS IN THIS CLASS:
+        * INIT (constructor) and INTERNAL DATABASE ID
+        * RETRIEVE DATA
+        * FOLLOW LINKS
+        * CREATE NODES
+        * DELETE NODES
+        * MODIFY FIELDS
+        * RELATIONSHIPS
+        * LABELS
+        * INDEXES
+        * CONSTRAINTS
+        * READ IN DATA from PANDAS
+        * JSON IMPORT/EXPORT
+        * DEBUGGING SUPPORT
+
+    It makes use of separate classes (NOT meant for the end user) in the file cypher_utils.py
+    """
+
+    def __init__(self,
+                 host=os.environ.get("NEO4J_HOST"),
+                 credentials=(os.environ.get("NEO4J_USER"), os.environ.get("NEO4J_PASSWORD")),
+                 apoc=False,
+                 debug=False,
+                 autoconnect=True):
+        """
+        For argument description, see the constructor of the parent class "NeoAccessCore"
+        """
+        super().__init__(host=host, credentials=credentials,
+                         apoc=apoc, debug=debug, autoconnect=autoconnect)
+
+
+
+    def assert_valid_internal_id(self, internal_id: int) -> None:
+        """
+        Raise an Exception if the argument is not a valid database internal ID
+
+        :param internal_id: Alleged Neo4j internal database ID
+        :return:            None
+        """
+        CypherUtils.assert_valid_internal_id(internal_id)
+
+
+
     #####################################################################################################
 
     '''                                      ~   RETRIEVE DATA   ~                                            '''
@@ -578,6 +609,8 @@ class NeoAccess:
             return False
         else:
             return True
+
+
 
 
 
@@ -1673,7 +1706,7 @@ class NeoAccess:
         nodes_to   = cypher_match_to.extract_node()
 
         where_clause = CypherUtils.combined_where([cypher_match_from, cypher_match_to]) # Combine the two WHERE clauses from each of the matches,
-                                                                                        # and also prefix (if appropriate) the WHERE keyword
+        # and also prefix (if appropriate) the WHERE keyword
 
         from_dummy_name = cypher_match_from.extract_dummy_name()
         to_dummy_name = cypher_match_to.extract_dummy_name()
@@ -3065,3 +3098,4 @@ class NeoAccess:
         :return:
         """
         return "local"
+
