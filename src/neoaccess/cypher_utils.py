@@ -7,13 +7,14 @@ class NodeSpecs:
     Meant as a PRIVATE class for NeoAccess; not indicated for the end user.
     
     Validates and stores all the passed specifications (the "RAW match structure"),
-    used to identify a node or group of nodes.
+    that are used to identify a node or group of nodes.
 
     Note:   NO database operation is actually performed
 
     IMPORTANT:  By our convention -
                     if internal_id is provided, all other conditions are DISREGARDED;
                     if it's missing, an implicit AND operation applies to all the specified conditions
+                (Regardless, all the passed data is stored in this object)
     """
 
     def __init__(self, internal_id=None,
@@ -30,8 +31,8 @@ class NodeSpecs:
                                 (Note: blank spaces ARE allowed in the strings)
                                 EXAMPLES:  "cars"
                                             ("cars", "powered vehicles")
-                            Note that if multiple labels are given, then only nodes with ALL of them will be matched;
-                            at present, there's no way to request an "OR" operation
+                            Note that if multiple labels are given, then only nodes possessing ALL of them will be matched;
+                            at present, there's no way to request an "OR" operation on labels
 
         :param key_name:    A string with the name of a node attribute; if provided, key_value must be present, too
         :param key_value:   The required value for the above key; if provided, key_name must be present, too
@@ -49,31 +50,36 @@ class NodeSpecs:
                                 EXAMPLES:   "n.age < 25 AND n.income > 100000"
                                             ("n.weight < $max_weight", {"max_weight": 100})
 
-        :param clause_dummy_name: A string with a name by which to refer to the node (by default, "n");
+        :param clause_dummy_name: A string with a name by which to refer to the nodes (by default, "n") in the clause;
                                 only used if a `clause` argument is passed (in the absence of a clause, it's stored as None)
         """
         # Validate all the passed arguments
         if internal_id is not None:
             assert CypherUtils.validate_internal_id(internal_id), \
-                f"match(): the argument `internal_id` ({internal_id}) is not a valid internal database ID value"
+                f"NodeSpecs(): the argument `internal_id` ({internal_id}) is not a valid internal database ID value"
 
         if labels is not None:
             assert (type(labels) == str) or (type(labels) == list) or (type(labels) == tuple), \
-                f"match(): the argument `labels`, if provided, must be a string, or a list/tuple of strings"
+                f"NodeSpecs(): the argument `labels`, if provided, must be a string, or a list/tuple of strings"
 
         if key_name is not None:
             assert type(key_name) == str, \
-                f"match(): the argument `key_name`, if provided, must be a string"
+                f"NodeSpecs(): the argument `key_name`, if provided, must be a string"
             assert key_value is not None, \
-                f"match(): if the argument `key_name` is provided, there must also be a `key_value` argument"
+                f"NodeSpecs(): if the argument `key_name` is provided, there must also be a `key_value` argument"
 
         if properties is not None:
             assert type(properties) == dict, \
-                f"match(): the argument `properties`, if provided, must be a python dictionary"
+                f"NodeSpecs(): the argument `properties`, if provided, must be a python dictionary"
 
         if clause is not None:
             assert (type(clause) == str) or (type(clause) == list) or (type(clause) == tuple), \
-                f"match(): the argument `clause`, if provided, must be a string or a pair.  EXAMPLE: 'n.age > 21'"
+                f"NodeSpecs(): the argument `clause`, if provided, must be a string or a pair.  EXAMPLE: 'n.age > 21'"
+            if type(clause) != str:
+                assert len(clause) == 2, \
+                    f"NodeSpecs(): the argument `clause`, if provided as tuple or list, must have exactly 2 elements.  " \
+                    f"EXAMPLE: ('n.weight < $max_weight', {'max_weight': 100})"
+                    
 
 
         if clause is None:
@@ -125,27 +131,35 @@ class CypherMatch:
         4) "dummy_node_name":   a string used for the node name inside the Cypher query (by default, "n");
                                 potentially relevant to the "node" and "where" values
 
-        EXAMPLES (shown as dict's):
-            *   {"node": "(n  )" , "where": "" , "data_binding": {}, "dummy_node_name": "n"}
-            *   {"node": "(p :`person` )" , "where": "" , "data_binding": {}, "dummy_node_name": "p"}
-            *   {"node": "(n  )" , "where": "id(n) = 123" , "data_binding": {}, "dummy_node_name": "n"}
-            *   {"node": "(n :`car`:`surplus inventory` )" ,
-                 "where": "" ,
-                 "data_binding": {},
-                 "dummy_node_name": "n"}
-            *   {"node": "(n :`person` {`gender`: $n_par_1, `age`: $n_par_2})",
-                 "where": "",
-                 "data_binding": {"n_par_1": "F", "n_par_2": 22},
-                 "dummy_node_name": "n"}
-            *   {"node": "(n :`person` {`gender`: $n_par_1, `age`: $n_par_2})",
-                 "where": "n.income > 90000 OR n.state = 'CA'",
-                 "data_binding": {"n_par_1": "F", "n_par_2": 22},
-                 "dummy_node_name": "n"}
-            *   {"node": "(n :`person` {`gender`: $n_par_1, `age`: $n_par_2})",
-                 "where": "n.income > $min_income",
-                 "data_binding": {"n_par_1": "F", "n_par_2": 22, "min_income": 90000},
-                 "dummy_node_name": "n"}
-    
+        EXAMPLES:
+            *   node: "(n  )"
+                    where: ""
+                    data_binding: {}
+                    dummy_node_name: "n"
+            *   node: "(p :`person` )"
+                    where: ""
+                    data_binding: {}
+                    dummy_node_name: "p"
+            *   node: "(n  )"
+                    where: "id(n) = 123"
+                    data_binding: {}
+                    dummy_node_name: "n"
+            *   node: "(n :`car`:`surplus inventory` )"
+                    where: ""
+                    data_binding: {}
+                    dummy_node_name: "n"
+            *    node: "(n :`person` {`gender`: $n_par_1, `age`: $n_par_2})"
+                    where: ""
+                    data_binding: {"n_par_1": "F", "n_par_2": 22}
+                    dummy_node_name: "n"
+            *   node: "(n :`person` {`gender`: $n_par_1, `age`: $n_par_2})"
+                    where: "n.income > 90000 OR n.state = 'CA'"
+                    data_binding: {"n_par_1": "F", "n_par_2": 22}
+                    dummy_node_name: "n"
+            *   node: "(n :`person` {`gender`: $n_par_1, `age`: $n_par_2})"
+                    where: "n.income > $min_income"
+                    data_binding: {"n_par_1": "F", "n_par_2": 22, "min_income": 90000}
+                    dummy_node_name: "n"
     """
     
     def __init__(self, node_specs, dummy_node_name_if_missing=None):
@@ -155,6 +169,7 @@ class CypherMatch:
         :param dummy_node_name_if_missing:  String that will be used ONLY if the object passed to in node_specs
                                                 lacks that attribute
         """
+        # Extract all the data from the node_specs object
         internal_id=node_specs.internal_id
         labels=node_specs.labels
         key_name=node_specs.key_name
@@ -253,7 +268,7 @@ class CypherMatch:
         if cypher_clause:
             cypher_clause = cypher_clause.strip()           # Zap any leading/trailing blanks
 
-
+        # Save all the processed data to be used for query parts to identify the node or nodes
         self.node = cypher_match
         self.where = cypher_clause
         self.data_binding = cypher_dict
@@ -271,9 +286,9 @@ class CypherMatch:
 
     def extract_node(self) -> str:
         """
-        Return the node information to be used in Cypher queries
+        Return the node information to be used in composing Cypher queries
 
-        :return:        A string with the node information.  EXAMPLES:
+        :return:        A string with the node information, as needed by Cypher queries.  EXAMPLES:
                             "(n  )"
                             "(p :`person` )"
                             "(n :`car`:`surplus inventory` )"
@@ -284,7 +299,7 @@ class CypherMatch:
 
     def extract_dummy_name(self) -> str:
         """
-        Return the dummy_node_name to be used in Cypher queries
+        Return the dummy node _name to be used in composing Cypher queries
 
         :return:        A string with the dummy node name (often "n" , or "to" , or "from")
         """
@@ -294,7 +309,8 @@ class CypherMatch:
     def unpack_match(self) -> list:
         """
         Return a list containing:
-        [node, where, data_binding, dummy_node_name]
+        [node, where, data_binding, dummy_node_name] ,
+        for use in composing Cypher queries
 
         TODO:   maybe gradually phase out, as more advanced util methods
                 make the unpacking of all the "match" internal structure unnecessary.
@@ -322,6 +338,7 @@ class CypherMatch:
 
 
 
+
 ######################################################################################################################
 
 class CypherUtils:
@@ -333,10 +350,13 @@ class CypherUtils:
     @classmethod
     def process_match_structure(cls, handle: Union[int, NodeSpecs], dummy_node_name="n") -> CypherMatch:
         """
+        Accept either a valid internal database node ID, or a "NodeSpecs" object (a "raw match"),
+        and turn it into a "CypherMatch" object (a "processed match")
 
         :param handle:
         :param dummy_node_name:
-        :return:
+        :return:                A "CypherMatch" object (a "processed match"), used to identify a node,
+                                    or group of nodes
         """
         if cls.validate_internal_id(handle):    # If the argument "handle" is a valid internal database ID
             node_specs = NodeSpecs(internal_id=handle)
@@ -350,11 +370,12 @@ class CypherUtils:
     @classmethod
     def check_match_compatibility(cls, match1: CypherMatch, match2: CypherMatch) -> None:
         """
-        If the two given PROCESSED match structures are incompatible (in terms of collision in their dummy node name),
+        If the two given "CypherMatch" objects (i.e. PROCESSED match structures)
+        are incompatible - in terms of collision in their dummy node names -
         raise an Exception.
 
-        :param match1:
-        :param match2:
+        :param match1:  A CypherMatch" object to be used to identify a node, or group of nodes
+        :param match2:  A CypherMatch" object to be used to identify a node, or group of nodes
         :return:        None
         """
         assert match1.dummy_node_name != match2.dummy_node_name, \
@@ -365,36 +386,41 @@ class CypherUtils:
 
 
     @classmethod
-    def combined_where(cls, match_list: [CypherMatch]) -> str:
+    def combined_where(cls, match1: CypherMatch, match2: CypherMatch) -> str:
         """
-        Given a list of "CypherMatch" objects, return the combined version of all their WHERE statements.
+        Given the two "CypherMatch" objects (i.e. PROCESSED match structures),
+        return the combined version of all their WHERE statements.
         For details, see prepare_where()
-        TODO: Make sure there's no conflict in the dummy node names
+        IMPORTANT:  if the individual matches are meant to refer to different nodes,
+                    need to first make sure there's no conflict in the dummy node names -
+                    use check_match_compatibility() as needed
 
-        :param match_list:  A list of CypherMatch" objects
-        :return:            A string with the combined WHERE statement,
+        :param match1:  A CypherMatch" object to be used to identify a node, or group of nodes
+        :param match2:  A CypherMatch" object to be used to identify a node, or group of nodes
+        :return:        A string with the combined WHERE statement,
                             suitable for inclusion into a Cypher query (empty if there were no subclauses)
         """
-        where_list = [match.where for match in match_list]
+        where_list = [match1.where, match2.where]
         return cls.prepare_where(where_list)
 
 
-
     @classmethod
-    def combined_data_binding(cls, match_list: [CypherMatch]) -> dict:
+    def combined_data_binding(cls, match1: CypherMatch, match2: CypherMatch) -> dict:
         """
-        Given a list of "CypherMatch" objects, returned the combined version of all their data binding dictionaries.
-        TODO: Make sure there's no conflicts
-        TODO: Since this also works with a 1-element list, it can be use to simply unpack the data binding from the match structure
-              (i.e. ought to drop the "combined" from the name)
-        """
-        first_match = match_list[0]
-        combined_data_binding = first_match.data_binding
+        Given the two "CypherMatch" objects (i.e. PROCESSED match structures),
+        return the combined version of all their data binding dictionaries.
+        IMPORTANT:  if the individual matches are meant to refer to different nodes,
+                    need to first make sure there's no conflict in the dummy node names -
+                    use check_match_compatibility() as needed
 
-        for i, match in enumerate(match_list):
-            if i != 0:      # Skip the first one, which we already processed above
-                new_data_binding = match.data_binding
-                combined_data_binding.update(new_data_binding)
+        :param match1:  A CypherMatch" object to be used to identify a node, or group of nodes
+        :param match2:  A CypherMatch" object to be used to identify a node, or group of nodes
+        :return:        A (possibly empty) dict with the combined data binding dictionaries,
+                            suitable for inclusion into a Cypher query
+        """
+        combined_data_binding = match1.data_binding     # Our 1st dict
+        new_data_binding = match2.data_binding          # Our 2nd dict
+        combined_data_binding.update(new_data_binding)  # Merge the second dict into the first one
 
         return combined_data_binding
 
@@ -466,9 +492,9 @@ class CypherUtils:
     @classmethod
     def prepare_where(cls, where_list: Union[str, list]) -> str:
         """
-        Given a WHERE clauses, or list/tuple of them, combined them all into one -
-        and also prefix to the result (if appropriate) the WHERE keyword.
-        The combined clauses of the WHERE statement are parentheses-enclosed, to protect against code injection
+        Given a WHERE clause, or list/tuple of them, combined them all into one -
+        and also prefix the WHERE keyword to the result (if appropriate).
+        The *combined* clauses of the WHERE statement are parentheses-enclosed, to protect against code injection
 
         EXAMPLES:   "" or "      " or [] or ("  ", "") all result in  ""
                     "n.name = 'Julian'" returns "WHERE (n.name = 'Julian')"
@@ -483,9 +509,9 @@ class CypherUtils:
         """
         if type(where_list) == str:
             where_list = [where_list]
-
-        assert type(where_list) == list or type(where_list) == tuple, \
-            f"prepare_where(): the argument must be a string, list or tuple; instead, it was {type(where_list)}"
+        else:
+            assert type(where_list) == list or type(where_list) == tuple, \
+                f"prepare_where(): the argument must be a string, list or tuple; instead, it was of type {type(where_list)}"
 
         purged_where_list = [w for w in where_list if w.strip() != ""]      # Drop all the blank terms in the list
 

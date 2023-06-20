@@ -9,6 +9,7 @@ import sys
 import json
 from typing import Union, List
 
+
 '''
     ----------------------------------------------------------------------------------
     HISTORY and AUTHORS:
@@ -508,7 +509,7 @@ class NeoAccess(NeoAccessCore):
         such as lookup, creation, deletion, modification, import, indices, etc.
 
     SECTIONS IN THIS CLASS:
-        * INIT (constructor) and INTERNAL DATABASE ID
+        * INTERNAL DATABASE ID
         * RETRIEVE DATA
         * FOLLOW LINKS
         * CREATE NODES
@@ -524,19 +525,6 @@ class NeoAccess(NeoAccessCore):
 
     It makes use of separate classes (NOT meant for the end user) in the file cypher_utils.py
     """
-
-    def __init__(self,
-                 host=os.environ.get("NEO4J_HOST"),
-                 credentials=(os.environ.get("NEO4J_USER"), os.environ.get("NEO4J_PASSWORD")),
-                 apoc=False,
-                 debug=False,
-                 autoconnect=True):
-        """
-        For argument description, see the constructor of the parent class "NeoAccessCore"
-        """
-        super().__init__(host=host, credentials=credentials,
-                         apoc=apoc, debug=debug, autoconnect=autoconnect)
-
 
 
     def assert_valid_internal_id(self, internal_id: int) -> None:
@@ -1071,7 +1059,7 @@ class NeoAccess(NeoAccessCore):
                                 to give to the links connecting to them;
                                 use None, or an empty list, to indicate if there aren't any
                                 Each dict contains the following keys:
-                                    "internal_id"        REQUIRED - to identify an existing node
+                                    "internal_id"   REQUIRED - to identify an existing node
                                     "rel_name"      REQUIRED - the name to give to the link
                                     "rel_dir"       OPTIONAL (default "OUT") - either "IN" or "OUT" from the new node
                                     "rel_attrs"     OPTIONAL - A dictionary of relationship attributes
@@ -1705,8 +1693,10 @@ class NeoAccess(NeoAccessCore):
         nodes_from = cypher_match_from.extract_node()
         nodes_to   = cypher_match_to.extract_node()
 
-        where_clause = CypherUtils.combined_where([cypher_match_from, cypher_match_to]) # Combine the two WHERE clauses from each of the matches,
+        # Combine the two WHERE clauses from each of the matches,
         # and also prefix (if appropriate) the WHERE keyword
+        where_clause = CypherUtils.combined_where(cypher_match_from, cypher_match_to)
+
 
         from_dummy_name = cypher_match_from.extract_dummy_name()
         to_dummy_name = cypher_match_to.extract_dummy_name()
@@ -1719,7 +1709,7 @@ class NeoAccess(NeoAccessCore):
             '''
 
         # Merge the data-binding dict's
-        combined_data_binding = CypherUtils.combined_data_binding([cypher_match_from, cypher_match_to])
+        combined_data_binding = CypherUtils.combined_data_binding(cypher_match_from, cypher_match_to)
 
         self.debug_query_print(q, combined_data_binding, "add_links")
 
@@ -1811,7 +1801,7 @@ class NeoAccess(NeoAccessCore):
         nodes_from = match_from.extract_node()
         nodes_to   = match_to.extract_node()
 
-        where_clause = CypherUtils.combined_where([match_from, match_to])   # Combine the two WHERE clauses from each of the matches,
+        where_clause = CypherUtils.combined_where(match_from, match_to)   # Combine the two WHERE clauses from each of the matches,
         # and also prefix (if appropriate) the WHERE keyword
         # Prepare the query
         if rel_name is None or rel_name == "":  # Delete ALL relationships
@@ -1828,7 +1818,7 @@ class NeoAccess(NeoAccessCore):
                 '''
 
         # Merge the data-binding dict's
-        combined_data_binding = CypherUtils.combined_data_binding([match_from, match_to])
+        combined_data_binding = CypherUtils.combined_data_binding(match_from, match_to)
 
         self.debug_query_print(q, combined_data_binding, "remove_links")
 
@@ -1900,7 +1890,7 @@ class NeoAccess(NeoAccessCore):
         nodes_from = match_from.extract_node()
         nodes_to   = match_to.extract_node()
 
-        where_clause = CypherUtils.combined_where([match_from, match_to])   # Combine the two WHERE clauses from each of the matches,
+        where_clause = CypherUtils.combined_where(match_from, match_to)   # Combine the two WHERE clauses from each of the matches,
         # and also prefix (if appropriate) the WHERE keyword
         # Prepare the query
         q = f'''
@@ -1910,7 +1900,7 @@ class NeoAccess(NeoAccessCore):
             '''
 
         # Merge the data-binding dict's
-        combined_data_binding = CypherUtils.combined_data_binding([match_from, match_to])
+        combined_data_binding = CypherUtils.combined_data_binding(match_from, match_to)
 
         self.debug_query_print(q, combined_data_binding, "number_of_links")
 

@@ -1,5 +1,15 @@
-####  WARNING : the database will get erased!!!
+####  WARNING : the Neo4j database identified by the environment variables below, will get erased!!!
 
+"""
+IMPORTANT - to run the pytests in this file, the following ENVIRONMENT VARIABLES must first be set:
+                1. NEO4J_HOST
+                2. NEO4J_USER
+                3. NEO4J_PASSWORD
+
+            For example, if using PyCharm, follow the main menu to: Run > Edit Configurations
+            and then, in the template for pytest, set Environment Variable to something like:
+                    NEO4J_HOST=bolt://<your IP address>:7687;NEO4J_USER=neo4j;NEO4J_PASSWORD=<your Neo4j password>
+"""
 
 import pytest
 from src.neoaccess import neoaccess as neo_access
@@ -12,22 +22,29 @@ import pandas as pd
 # Provide a database connection that can be used by the various tests that need it
 @pytest.fixture(scope="module")
 def db():
-    neo_obj = neo_access.NeoAccess(debug=False)
+    # MAKE SURE TO FIRST SET THE ENVIRONMENT VARIABLES, prior to run the pytests in this file!
+    neo_obj = neo_access.NeoAccess(debug=False)     # Change the debug option to True if desired
     yield neo_obj
 
 
+
+
+#################  METHODS from the Parent Class NeoAccessCore  #################
 
 ###  ~ INIT ~
 
 def test_construction():
     # Note: if database isn't running, the error output includes the line:
     """
-    Exception: CHECK IF NEO4J IS RUNNING! While instantiating the NeoAccess object, failed to create the driver: Unable to retrieve routing information
+        Exception: CHECK IF NEO4J IS RUNNING! While instantiating the NeoAccess object,
+        failed to create the driver: Unable to retrieve routing information
     """
+
+    # MAKE SURE TO FIRST SET THE ENVIRONMENT VARIABLES
     url = os.environ.get("NEO4J_HOST")
 
     credentials_name = os.environ.get("NEO4J_USER")
-    credentials_pass = os.environ.get("NEO4J_PASSWORD")     # MAKE SURE TO SET ENVIRONMENT VARIABLE ACCORDINGLY!
+    credentials_pass = os.environ.get("NEO4J_PASSWORD")
 
     credentials_as_tuple = (credentials_name, credentials_pass)
     credentials_as_list = [credentials_name, credentials_pass]
@@ -233,6 +250,9 @@ def test_query_extended(db):
     assert result == [{"count(c)": 2}]
 
 
+
+
+#################  METHODS from the Child Class NeoAccess  #################
 
 def test_update_query(db):
     pass    # TODO
