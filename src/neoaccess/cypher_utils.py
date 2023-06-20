@@ -386,20 +386,22 @@ class CypherUtils:
 
 
     @classmethod
-    def combined_where(cls, match1: CypherMatch, match2: CypherMatch) -> str:
+    def combined_where(cls, match1: CypherMatch, match2: CypherMatch, check_compatibility=True) -> str:
         """
         Given the two "CypherMatch" objects (i.e. PROCESSED match structures),
         return the combined version of all their WHERE statements.
         For details, see prepare_where()
-        IMPORTANT:  if the individual matches are meant to refer to different nodes,
-                    need to first make sure there's no conflict in the dummy node names -
-                    use check_match_compatibility() as needed
 
         :param match1:  A CypherMatch" object to be used to identify a node, or group of nodes
         :param match2:  A CypherMatch" object to be used to identify a node, or group of nodes
+        :param check_compatibility: Use True if the individual matches are meant to refer to different nodes,
+                                        and need to make sure there's no conflict in the dummy node names
         :return:        A string with the combined WHERE statement,
                             suitable for inclusion into a Cypher query (empty if there were no subclauses)
         """
+        if check_compatibility:
+            cls.check_match_compatibility(match1, match2)
+
         where_list = [match1.where, match2.where]
         return cls.prepare_where(where_list)
 
@@ -409,9 +411,11 @@ class CypherUtils:
         """
         Given the two "CypherMatch" objects (i.e. PROCESSED match structures),
         return the combined version of all their data binding dictionaries.
-        IMPORTANT:  if the individual matches are meant to refer to different nodes,
+        NOTE:  if the individual matches are meant to refer to different nodes,
                     need to first make sure there's no conflict in the dummy node names -
-                    use check_match_compatibility() as needed
+                    use check_match_compatibility() as needed.
+                    In practice, combined_where() is typically run whenever combined_data_binding() is -
+                    and the former can take care of checking for compatibility
 
         :param match1:  A CypherMatch" object to be used to identify a node, or group of nodes
         :param match2:  A CypherMatch" object to be used to identify a node, or group of nodes

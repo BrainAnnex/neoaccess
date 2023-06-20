@@ -1686,16 +1686,13 @@ class NeoAccess(NeoAccessCore):
             print("    cypher_match_from:", cypher_match_from)
             print("    cypher_match_to:", cypher_match_to)
 
-        # Make sure there's no conflict in node dummy names
-        CypherUtils.check_match_compatibility(cypher_match_from, cypher_match_to)
-
         # Unpack needed values from the cypher_match_from and cypher_match_to structures
         nodes_from = cypher_match_from.extract_node()
         nodes_to   = cypher_match_to.extract_node()
 
         # Combine the two WHERE clauses from each of the matches,
         # and also prefix (if appropriate) the WHERE keyword
-        where_clause = CypherUtils.combined_where(cypher_match_from, cypher_match_to)
+        where_clause = CypherUtils.combined_where(cypher_match_from, cypher_match_to, check_compatibility=True)
 
 
         from_dummy_name = cypher_match_from.extract_dummy_name()
@@ -1794,15 +1791,14 @@ class NeoAccess(NeoAccessCore):
             print("    match_from:", match_from)
             print("    match_to:", match_to)
 
-        # Make sure there's no conflict in node dummy names
-        CypherUtils.check_match_compatibility(match_from, match_to)
-
         # Unpack needed values from the match_from and match_to structures
         nodes_from = match_from.extract_node()
         nodes_to   = match_to.extract_node()
 
-        where_clause = CypherUtils.combined_where(match_from, match_to)   # Combine the two WHERE clauses from each of the matches,
+        # Combine the two WHERE clauses from each of the matches,
         # and also prefix (if appropriate) the WHERE keyword
+        where_clause = CypherUtils.combined_where(match_from, match_to, check_compatibility=True)
+
         # Prepare the query
         if rel_name is None or rel_name == "":  # Delete ALL relationships
             q = f'''
@@ -1883,15 +1879,14 @@ class NeoAccess(NeoAccessCore):
             print("    match_from:", match_from)
             print("    match_to:", match_to)
 
-        # Make sure there's no conflict in the dummy node names
-        CypherUtils.check_match_compatibility(match_from, match_to)
-
         # Unpack needed values from the match_from and match_to structures
         nodes_from = match_from.extract_node()
         nodes_to   = match_to.extract_node()
 
-        where_clause = CypherUtils.combined_where(match_from, match_to)   # Combine the two WHERE clauses from each of the matches,
+        # Combine the two WHERE clauses from each of the matches,
         # and also prefix (if appropriate) the WHERE keyword
+        where_clause = CypherUtils.combined_where(match_from, match_to, check_compatibility=True)
+
         # Prepare the query
         q = f'''
             MATCH {nodes_from} -[r :`{rel_name}`]-> {nodes_to}
