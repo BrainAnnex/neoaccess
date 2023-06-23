@@ -123,7 +123,11 @@ class NeoAccessCore:
 
         try:
             user, password = self.credentials  # This unpacking will work whether the credentials were passed as a tuple or list
-            print(f"Attempting to connect to Neo4j host '{self.host}', with username '{user}'")
+            if self.debug:
+                print(f"Attempting to connect to Neo4j host '{self.host}', with username '{user}'")
+            else:
+                print(f"Attempting to connect to Neo4j database")
+
             self.driver = GraphDatabase.driver(self.host,
                                                auth=(user, password))   # Object to connect to Neo4j's Bolt driver for Python
             # https://neo4j.com/docs/api/python-driver/4.3/api.html#driver
@@ -402,7 +406,7 @@ class NeoAccessCore:
 
 
 
-    def update_query(self, cypher: str, data_binding=None) -> dict:
+    def update_query(self, q: str, data_binding=None) -> dict:
         """
         Run a Cypher query and return statistics about its actions (such number of nodes created, etc.)
         Typical use is for queries that update the database.
@@ -417,7 +421,7 @@ class NeoAccessCore:
                                   'returned_data': [{'internal_id': 123}]
                                  } , assuming 123 is the Neo4j internal ID of the newly-created node
 
-        :param cypher:      Any Cypher query, but typically one that doesn't return anything    TODO: change to "q" for consistency
+        :param q:           Any Cypher query, but typically one that doesn't return anything
         :param data_binding: Data-binding dictionary for the Cypher query
 
         :return:            A dictionary of statistics (counters) about the query just run
@@ -439,9 +443,9 @@ class NeoAccessCore:
 
         # Start a new session, use it, and then immediately close it
         with self.driver.session() as new_session:
-            result = new_session.run(cypher, data_binding)
+            result = new_session.run(q, data_binding)
             if self.profiling:
-                print("-- update_query() PROFILING ----------\n", cypher, "\n", data_binding)
+                print("-- update_query() PROFILING ----------\n", q, "\n", data_binding)
 
             # Note: result is a neo4j.Result iterable object
             #       See https://neo4j.com/docs/api/python-driver/current/api.html#neo4j.Result
@@ -585,9 +589,9 @@ class NeoAccess(NeoAccessCore):
         """
         Return True if a node with the given labels and key_name/key_value exists, or False otherwise
         TODO: test for multiple labels
-        :param labels:
-        :param key_name:
-        :param key_value:
+        :param labels:      A string or list/tuple of strings
+        :param key_name:    A string with the name of a node attribute
+        :param key_value:   The desired value of the key_name attribute
         :return:            True if a node with the given labels and key_name/key_value exists,
                                 or False otherwise
         """
@@ -597,8 +601,6 @@ class NeoAccess(NeoAccessCore):
             return False
         else:
             return True
-
-
 
 
 
@@ -880,7 +882,8 @@ class NeoAccess(NeoAccessCore):
         and with the attributes/values specified in the properties dictionary.
         Return the Neo4j internal ID of the node just created.
 
-        :param labels:      A string, or list/tuple of strings, specifying Neo4j labels (ok to have blank spaces)
+        :param labels:      A string, or list/tuple of strings, specifying Neo4j labels (ok to have blank spaces);
+                                it's acceptable to be None
         :param properties:  OPTIONAL (possibly empty or None) dictionary of properties to set for the new node.
                                 EXAMPLE: {'age': 22, 'gender': 'F'}
 
@@ -1508,7 +1511,7 @@ class NeoAccess(NeoAccessCore):
 
     def bulk_delete_by_label(self, label: str):    # TODO: test.  CAUTION: only tested interactively
         """
-        IMPORTANT: APOC required (starting from v 4.4 of Neo4j, will be able to do this without APOC)
+        IMPORTANT: APOC required (starting from v 4.4 of Neo4j, will be able to do this without APOC; TODO: not yet tested)
 
         Meant for large databases, where the straightforward deletion operations may result
         in very large number of nodes, and take a long time (or possibly fail)
@@ -1922,11 +1925,11 @@ class NeoAccess(NeoAccessCore):
 
         :return:                None.  If unsuccessful, an Exception is raised
         """
-        assert CypherUtils.validate_internal_id(node), \
+        assert CypherUtils.valid_internal_id(node), \
             f"reattach_node(): not a valid internal database ID ({node})"
-        assert CypherUtils.validate_internal_id(old_attachment), \
+        assert CypherUtils.valid_internal_id(old_attachment), \
             f"reattach_node(): not a valid internal database ID ({old_attachment})"
-        assert CypherUtils.validate_internal_id(new_attachment), \
+        assert CypherUtils.valid_internal_id(new_attachment), \
             f"reattach_node(): not a valid internal database ID ({new_attachment})"
 
         if rel_name_new is None:
@@ -2520,7 +2523,7 @@ class NeoAccess(NeoAccessCore):
     def export_dbase_json(self) -> {}:
         """
         Export the entire Neo4j database as a JSON string.
-        TODO: offer an option to automatically include today's date in name of exported file
+        TODO: offer an option to automatically include today's date in the name of exported file
 
         IMPORTANT: APOC must be activated in the database, to use this function.
                    Otherwise it'll raise an Exception
@@ -2931,7 +2934,8 @@ class NeoAccess(NeoAccessCore):
                     #print("ADDING NODE: ", item)
                     #print(f'     Creating node with labels `{item["labels"]}` and properties {item["properties"]}')
                     old_id = int(item["id"])
-                    new_id = self.create_node(item["labels"], item["properties"])  # Note: any number of labels can be imported
+                    new_id = self.create_node(labels=item.get("labels"), properties=item.get("properties")) # Note: any number of labels can be imported
+                                                                                                            #       if item has no labels/properties, None will be passed
                     id_shifting[old_id] = new_id
                     num_nodes_imported += 1
         except Exception as ex:

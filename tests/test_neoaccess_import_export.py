@@ -14,7 +14,7 @@ def db():
 
 
 
-def test_export_dbase_json(db):
+def test_export_dbase_json(db):     # TODO: this test intermittently fails due to varying order; to fix
     # Completely clear the database
     db.empty_dbase()
 
@@ -279,7 +279,7 @@ def test_export_nodes_rels_json(db):    # TODO: this test intermittently fails, 
 
 
 
-def test_import_json_data(db):
+def test_import_json_data(db):  # TODO: this test intermittently fails, due an assert issue involving order in a JSON string
 
     # Check various malformed JSON data dumps
     with pytest.raises(Exception):

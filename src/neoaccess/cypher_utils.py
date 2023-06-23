@@ -1,4 +1,10 @@
+# This file contains 3 helper classes for the NeoAccess library:
+#       - NodeSpecs         To store the specs to identify one or more nodes (the "RAW match structure")
+#       - CypherMatch       To store Cypher fragments & data-binding dict, to identify one or more nodes (the "PROCESSED match structure")
+#       - CypherUtils       Static class to pre-process node specs, plus misc. Cypher-related utilities
+
 from typing import Union
+
 
 
 class NodeSpecs:
@@ -55,7 +61,7 @@ class NodeSpecs:
         """
         # Validate all the passed arguments
         if internal_id is not None:
-            assert CypherUtils.validate_internal_id(internal_id), \
+            assert CypherUtils.valid_internal_id(internal_id), \
                 f"NodeSpecs(): the argument `internal_id` ({internal_id}) is not a valid internal database ID value"
 
         if labels is not None:
@@ -118,7 +124,7 @@ class CypherMatch:
     Helper class for the class "NeoAccess".
     Meant as a PRIVATE class for NeoAccess; not indicated for the end user.
     
-    Objects of this class (sometimes referred to as a "processed match structures") 
+    Objects of this class (sometimes referred to as a "PROCESSED match structures")
     are used to facilitate for a user to specify a node in a wide variety of way - and
     save those specifications, in a "pre-digested" way, to use as needed in Cypher queries.
     
@@ -132,7 +138,7 @@ class CypherMatch:
                                 potentially relevant to the "node" and "where" values
 
         EXAMPLES:
-            *   node: "(n  )"
+            *   node: "(n)"
                     where: ""
                     data_binding: {}
                     dummy_node_name: "n"
@@ -164,19 +170,12 @@ class CypherMatch:
     
     def __init__(self, node_specs, dummy_node_name_if_missing=None):
         """
-        
+
+
         :param node_specs:                  Object of type "NodeSpecs"
         :param dummy_node_name_if_missing:  String that will be used ONLY if the object passed to in node_specs
                                                 lacks that attribute
         """
-        # Extract all the data from the node_specs object
-        internal_id=node_specs.internal_id
-        labels=node_specs.labels
-        key_name=node_specs.key_name
-        key_value=node_specs.key_value
-        properties=node_specs.properties
-        subquery=node_specs.clause
-
         # If a value is already present in the raw match structure,
         # it takes priority
         if node_specs.clause_dummy_name is None:
@@ -185,22 +184,35 @@ class CypherMatch:
             dummy_node_name = node_specs.clause_dummy_name
 
         assert dummy_node_name is not None, \
-            "The class `CypherMatch` cannot be instantiated with a missing dummy none name"
+                "The class `CypherMatch` cannot be instantiated with a missing dummy none name"
 
-        # Turn labels (string or list/tuple of strings) into a string suitable for inclusion into Cypher
-        cypher_labels = CypherUtils.prepare_labels(labels)      # EXAMPLES:     ":`patient`"
-                                                                #               ":`CAR`:`INVENTORY`"
 
-        if internal_id is not None:     # If an internal node ID is specified, it over-rides all the other conditions
+        """
+        IMPORTANT:  By our convention -
+                if internal_id is provided, all other conditions are DISREGARDED;
+                if it's missing, an implicit AND operation applies to all the specified conditions
+        """
+        if node_specs.internal_id is not None:     # If an internal node ID is specified, it over-rides all the other conditions
                                         # CAUTION: internal_id might be 0 ; that's a valid Neo4j node ID
             cypher_match = f"({dummy_node_name})"
-            cypher_where = f"id({dummy_node_name}) = {internal_id}"
+            cypher_where = f"id({dummy_node_name}) = {node_specs.internal_id}"
             self.node = cypher_match
             self.where = cypher_where
             self.data_binding = {}
             self.dummy_node_name = dummy_node_name
             return
 
+
+
+        # Turn labels (string or list/tuple of strings) into a string suitable for inclusion into Cypher
+        cypher_labels = CypherUtils.prepare_labels(node_specs.labels)       # EXAMPLES:     ":`patient`"
+                                                                            #               ":`CAR`:`INVENTORY`"
+
+        # Extract all the data from the "NodeSpecs" object
+        key_name=node_specs.key_name
+        key_value=node_specs.key_value
+        properties=node_specs.properties
+        subquery=node_specs.clause
 
         if key_name and key_value is None:  # CAUTION: key_value might legitimately be 0 or "" (hence the "is None")
             raise Exception("If key_name is specified, so must be key_value")
@@ -275,6 +287,7 @@ class CypherMatch:
         self.dummy_node_name = dummy_node_name
 
 
+
     def __str__(self):
         return f"CYPHER-PROCESSED match structure:\n" \
                f"    node: {self.node}" \
@@ -312,9 +325,6 @@ class CypherMatch:
         [node, where, data_binding, dummy_node_name] ,
         for use in composing Cypher queries
 
-        TODO:   maybe gradually phase out, as more advanced util methods
-                make the unpacking of all the "match" internal structure unnecessary.
-
         :return:                A list containing [node, where, data_binding, dummy_node_name]
         """
         match_as_list = [self.node, self.where , self.data_binding, self.dummy_node_name]
@@ -326,7 +336,7 @@ class CypherMatch:
     def assert_valid_structure(self) -> None:
         """
         Verify that the object is a valid one (i.e., correctly initialized); if not, raise an Exception
-        TODO: NOT IN CURRENT USE.  Perhaps to phase out, or tighten the tests
+        TODO: NOT IN CURRENT USE.  Perhaps to phase out, or keep it but tighten its tests
 
         :return:        None
         """
@@ -358,7 +368,7 @@ class CypherUtils:
         :return:                A "CypherMatch" object (a "processed match"), used to identify a node,
                                     or group of nodes
         """
-        if cls.validate_internal_id(handle):    # If the argument "handle" is a valid internal database ID
+        if cls.valid_internal_id(handle):    # If the argument "handle" is a valid internal database ID
             node_specs = NodeSpecs(internal_id=handle)
             return CypherMatch(node_specs, dummy_node_name_if_missing=dummy_node_name)
 
@@ -442,7 +452,8 @@ class CypherUtils:
         :return:            None
         """
         assert type(internal_id) == int, \
-            f"assert_valid_internal_id(): Neo4j internal ID's MUST be integers; the value passed ({internal_id}) was {type(internal_id)}"
+            f"assert_valid_internal_id(): Neo4j internal ID's MUST be integers; " \
+            f"the value passed ({internal_id}) was of type {type(internal_id)}"
 
         # Note that 0 is a valid Neo4j ID (apparently inconsistently assigned, on occasion, by the database)
         assert internal_id >= 0, \
@@ -451,15 +462,19 @@ class CypherUtils:
 
 
     @classmethod
-    def validate_internal_id(cls, internal_id: int) -> bool:    # TODO: rename to valid_internal_id()
+    def valid_internal_id(cls, internal_id: int) -> bool:
         """
         Return True if internal_id is a valid ID as used internally by the database
         (aka "Neo4j ID")
 
-        :param internal_id:
-        :return:
+        :param internal_id: An alleged internal database ID
+        :return:            True if internal_id is a valid internal database ID, or False otherwise
         """
-        return (type(internal_id) == int) and (internal_id >= 0)
+        try:
+            cls.assert_valid_internal_id(internal_id)
+            return True
+        except Exception:
+            return False
 
 
 
@@ -475,7 +490,8 @@ class CypherUtils:
             "my label"          gives rise to   ":`my label`"
             ["car", "vehicle"]  gives rise to   ":`car`:`vehicle`"
 
-        :param labels:  A string, or list/tuple of strings, representing one or multiple Neo4j labels
+        :param labels:  A string, or list/tuple of strings, representing one or multiple Neo4j labels;
+                            it's acceptable to be None
         :return:        A string suitable for inclusion in the node part of a Cypher query
         """
         if not labels:
