@@ -105,7 +105,7 @@ class NodeSpecs:
 
 
     def __str__(self):
-        return f"RAW match structure:\n" \
+        return f"RAW match structure (object of class NodeSpecs):\n" \
                 f"    internal_id: {self.internal_id}" \
                 f"    labels: {self.labels}" \
                 f"    key_name: {self.key_name}" \
@@ -289,7 +289,7 @@ class CypherMatch:
 
 
     def __str__(self):
-        return f"CYPHER-PROCESSED match structure:\n" \
+        return f"CYPHER-PROCESSED match structure (object of class CypherMatch):\n" \
                f"    node: {self.node}" \
                f"    where: {self.where}" \
                f"    data_binding: {self.data_binding}" \
@@ -330,6 +330,12 @@ class CypherMatch:
         match_as_list = [self.node, self.where , self.data_binding, self.dummy_node_name]
 
         return match_as_list
+
+
+
+    def extract_where_clause(self) -> str:
+        # TODO: new method to test.  Cleanup the WHERE clause, and prefix the "WHERE" keyword as needed
+        return CypherUtils.prepare_where([self.where])
 
 
 
@@ -400,6 +406,8 @@ class CypherUtils:
         """
         Given the two "CypherMatch" objects (i.e. PROCESSED match structures),
         return the combined version of all their WHERE statements.
+        Also prefix the WHERE keyword to the result (if appropriate);
+        if there are no clauses, an empty string is returned (without the WHERE keyword.)
         For details, see prepare_where()
 
         :param match1:  A CypherMatch" object to be used to identify a node, or group of nodes
@@ -457,7 +465,7 @@ class CypherUtils:
 
         # Note that 0 is a valid Neo4j ID (apparently inconsistently assigned, on occasion, by the database)
         assert internal_id >= 0, \
-            f"assert_valid_internal_id(): Neo4j internal ID's cannot be negative; the value passed was {internal_id}"
+            f"assert_valid_internal_id(): Neo4j internal IDs cannot be negative; the value passed was {internal_id}"
 
 
 

@@ -97,7 +97,8 @@ class NeoAccessCore:
         """
         self.debug = debug
 
-        self.host = host
+        self.host = host    # TODO: validate that host starts with "bolt" or "neo4j"
+                            # TODO: maybe accept a host name without port number, and default port to 7687
         self.credentials = credentials
 
         self.apoc = apoc
@@ -124,9 +125,9 @@ class NeoAccessCore:
         try:
             user, password = self.credentials  # This unpacking will work whether the credentials were passed as a tuple or list
             if self.debug:
-                print(f"Attempting to connect to Neo4j host '{self.host}', with username '{user}'")
-            else:
-                print(f"Attempting to connect to Neo4j database")
+                print(f"Attempting to connect to Neo4j host '{self.host}', with username '{user}'...")
+            #else:
+                #print(f"Attempting to connect to Neo4j database...")
 
             self.driver = GraphDatabase.driver(self.host,
                                                auth=(user, password))   # Object to connect to Neo4j's Bolt driver for Python
@@ -137,8 +138,6 @@ class NeoAccessCore:
             # TODO: maybe try to detect that, and give a more informative message
             raise Exception(error_msg)
 
-        if self.debug:
-            print(f"Connection to host '{self.host}' established")
 
         # If we get thus far, the connection to the host was successfully established,
         # BUT this doesn't prove that we can actually connect to the database;
@@ -151,6 +150,12 @@ class NeoAccessCore:
             error_msg = f"Unable to access the Neo4j database; " \
                         f"CHECK THE DATABASE USERNAME/PASSWORD in the credentials your provided: {str(exc_type)} - {ex}"
             raise Exception(error_msg)
+
+
+        if self.debug:
+            print(f"Connection to host '{self.host}' established")
+        else:
+            print("Connection to Neo4j database established.")
 
 
 
@@ -223,13 +228,13 @@ class NeoAccessCore:
         :param single_row:      Return a dictionary with just the first (0-th) result row, if present - or {} in case of no results
                                 TODO: maybe this should be None
 
-        :param single_cell:     Meant in situations where only 1 node (record) is expected, and one wants only 1 specific field of that record.
-                                If single_cell is specified, return the value of the field by that name in the first returned record
+        :param single_cell:     (OPTIONAL) Meant in situations where only 1 node (record) is expected, and one wants only 1 specific field of that record.
+                                If provided, return the value of the field by that name in the first returned record
                                 Note: this will be None if there are no results, or if the first (0-th) result row lacks a key with this name
                                 TODO: test and give examples.  single_cell="name" will return result[0].get("name")
 
-        :param single_column:   Name of the column of interest.
-                                Form a list (possibly empty) from all the values of that particular column all records.
+        :param single_column:   (OPTIONAL) Name of the column of interest.
+                                If provided, assemble a list (possibly empty) from all the values of that particular column all records.
 
         :return:        If any of single_row, single_cell or single_column are True, see info under their entries.
                         If those arguments are all False, it returns a (possibly empty) list of dictionaries.
@@ -240,7 +245,7 @@ class NeoAccessCore:
                                                           'n2': {'gender': 'F', 'patient_id': 444}}
                             Cypher returns attribute values that get renamed: RETURN n.gender AS client_gender, n.pid AS client_id
                                     -> list items such as {'client_gender': 'M', 'client_id': 123}
-                            Cypher returns attribute values without renaming: RETURN n.gender, n.pid
+                            Cypher returns attribute values without renaming them: RETURN n.gender, n.pid
                                     -> list items such as {'n.gender': 'M', 'n.pid': 123}
                             Cypher returns a single computed value
                                     -> a single list item such as {"count(n)": 100}
@@ -297,7 +302,8 @@ class NeoAccessCore:
         Extended version of query(), meant to extract additional info
         for queries that return Graph Data Types,
         i.e. nodes, relationships or paths,
-        such as "MATCH (n) RETURN n", or "MATCH (n1)-[r]->(n2) RETURN r"
+        such as:    "MATCH (n) RETURN n"
+                    "MATCH (n1)-[r]->(n2) RETURN r"
 
         For example, useful in scenarios where nodes were returned,
         and their Neo4j internal IDs and/or labels are desired
@@ -312,13 +318,14 @@ class NeoAccessCore:
             if b1 == b2, would that still be [b1, c1, b1(b2), c2] or [b1, c1, c2] - i.e. would we remove the duplicates?
             Try running with flatten=True "MATCH (b:boat), (c:car) RETURN b, c" on data like "CREATE (b:boat), (c1:car1), (c2:car2)"
 
-        :param q:       A Cypher query
-        :param data_binding:  An optional Cypher dictionary
-                            EXAMPLE, assuming that the cypher string contains the substring "$age":
+        :param q:               A Cypher query
+        :param data_binding:    An optional Cypher dictionary
+                                EXAMPLE, assuming that the cypher string contains the substring "$age":
                                         {'age': 20}
-        :param flatten: Flag indicating whether the Graph Data Types need to remain clustered by record,
-                        or all placed in a single flattened list
-        :param fields_to_exclude:   Optional list of strings with name of fields (in the database or special ones added by this function)
+        :param flatten:         Flag indicating whether the Graph Data Types need to remain clustered by record,
+                                    or all placed in a single flattened list
+        :param fields_to_exclude:   Optional list of strings with name of fields
+                                    (in the database or special ones added by this function)
                                     that wishes to drop.  No harm in listing fields that aren't present
 
         :return:        A (possibly empty) list of dictionaries, if flatten is True,
@@ -663,9 +670,9 @@ class NeoAccess(NeoAccessCore):
         :param return_labels:   Flag indicating whether to also include the Neo4j label names in the returned data
                                     (using "neo4j_labels" as its key in the returned dictionary)
 
-        :param order_by:        Optional string with the key (field) name to order by, in ascending order
-                                    Note: lower and uppercase names are treated differently in the sort order
-        :param limit:           Optional integer to specify the maximum number of nodes returned
+        :param order_by:        (Optional) String with the key (field) name to order by, in ascending order
+                                    Caution: lower and uppercase names are treated differently in the sort order
+        :param limit:           (Optional) Integer to specify the maximum number of nodes returned
 
         :param single_row:      Meant in situations where only 1 node (record) is expected, or perhaps one wants to sample the 1st one;
                                     if not found, None will be returned [to distinguish it from a found record with no fields!]
@@ -677,7 +684,7 @@ class NeoAccess(NeoAccessCore):
 
         :return:                If single_cell is specified, return the value of the field by that name in the first node.
                                 If single_row is True, return a dictionary with the information of the first record (or None if no record exists)
-                                Otherwise, return a list whose entries are dictionaries with each record's information
+                                Otherwise, return a (possibly-empty) list whose entries are dictionaries with each record's information
                                     (the node's attribute names are the keys)
                                     EXAMPLE: [  {"gender": "M", "age": 42, "condition_id": 3},
                                                 {"gender": "M", "age": 76, "location": "Berkeley"}
@@ -714,13 +721,14 @@ class NeoAccess(NeoAccessCore):
         self.debug_query_print(cypher, data_binding, "get_nodes")
 
 
-        # Note: the flatten=True takes care of returning just the fields of the matched node "n", rather than dictionaries indexes by "n"
+        # Note: the flatten=True takes care of returning just the fields of the matched node "n",
+        #       rather than dictionaries indexes by "n"
         if return_internal_id and return_labels:
             result_list = self.query_extended(cypher, data_binding, flatten=True)
             # Note: query_extended() provides both 'internal_id' and 'neo4j_labels'
-        elif return_internal_id:     # but not return_labels
+        elif return_internal_id:    # but not return_labels
             result_list = self.query_extended(cypher, data_binding, flatten=True, fields_to_exclude=['neo4j_labels'])
-        elif return_labels:     # but not return_internal_id
+        elif return_labels:         # but not return_internal_id
             result_list = self.query_extended(cypher, data_binding, flatten=True, fields_to_exclude=['internal_id'])
         else:
             result_list = self.query_extended(cypher, data_binding, flatten=True, fields_to_exclude=['internal_id', 'neo4j_labels'])
@@ -741,6 +749,18 @@ class NeoAccess(NeoAccessCore):
             return result_list[0].get(single_cell)
 
         return result_list
+
+
+
+    def count_nodes(self) -> int:   # TODO: test
+        """
+        Compute and return the total number of nodes in the database
+
+        :return:    The total number of nodes in the database
+        """
+        q = "MATCH (n) RETURN COUNT(n) AS number_nodes"
+
+        return self.query(q, single_cell="number_nodes")
 
 
 
@@ -815,15 +835,14 @@ class NeoAccess(NeoAccessCore):
 
 
 
-    def get_node_internal_id(self, match: Union[int, NodeSpecs]) -> int:
+    def get_node_internal_id(self, match: NodeSpecs) -> int:
         """
         Return the internal database ID of a SINGLE node identified by the "match" data
         created by a call to match().
 
         If not found, or if more than 1 found, an Exception is raised
 
-        :param match:   EITHER an integer with an internal database node id,
-                            OR a "NodeSpecs" object, as returned by match(), with data to identify a node or set of nodes
+        :param match:   A "NodeSpecs" object, as returned by match(), with data to identify a node or set of nodes
         :return:        An integer with the internal database ID of the located node,
                         if exactly 1 node is found; otherwise, raise an Exception
         """
@@ -843,7 +862,7 @@ class NeoAccess(NeoAccessCore):
 
         assert len(result) != 0, "get_node_internal_id(): node NOT found"
 
-        assert len(result) <= 1, f"get_node_internal_id(): node not uniquely identified ({len(result)} matches found)"
+        assert len(result) <= 1, f"get_node_internal_id(): node NOT uniquely identified ({len(result)} matches found)"
 
         return result[0]
 
@@ -1644,7 +1663,7 @@ class NeoAccess(NeoAccessCore):
     def get_relationship_types(self) -> [str]:
         """
         Extract and return a list of all the Neo4j relationship names (i.e. types of relationships)
-        present in the database, in no particular order.
+        present in the entire database, in no particular order
 
         :return:    A list of strings
         """
@@ -1756,9 +1775,11 @@ class NeoAccess(NeoAccessCore):
 
 
 
+    # TODO: add a method to remove all links of a given name emanating to or from a given node
+    #       - as done for Schema.remove_all_data_relationship()
     def remove_links(self, match_from: Union[int, NodeSpecs], match_to: Union[int, NodeSpecs], rel_name) -> int:
         """
-        Remove one or more links (relationships, aka edges)
+        Remove one or more links (aka relationships/edges)
         originating in any of the nodes specified by the match_from specifications,
         and terminating in any of the nodes specified by the match_to specifications,
         optionally matching the given relationship name (will remove all edges if the name is blank or None)
@@ -1858,8 +1879,9 @@ class NeoAccess(NeoAccessCore):
 
     def number_of_links(self, match_from: Union[int, NodeSpecs], match_to: Union[int, NodeSpecs], rel_name: str) -> int:
         """
-        Return the number of links (aka edges, relationships) with the specified name exist in the direction
-        from and to the nodes (individual nodes or set of nodes) specified in the first two arguments.
+        Return the number of links (aka edges or relationships) with the given name
+        that exist in the direction from and to the nodes (individual nodes or set of nodes)
+        that are specified in the first two arguments.
 
         :param match_from:  EITHER an integer with an internal database node id,
                                 OR a "NodeSpecs" object, as returned by match(), with data to identify a node or set of nodes
@@ -2038,9 +2060,10 @@ class NeoAccess(NeoAccessCore):
 
     def follow_links(self, match: Union[int, NodeSpecs], rel_name: str, rel_dir ="OUT", neighbor_labels = None) -> [dict]:
         """
-        From the given starting node(s), follow all the relationships of the given name to and/or from it,
+        From the given starting node(s), follow all the relationships of the given name to or from it,
         into/from neighbor nodes (optionally having the given labels),
         and return all the properties of those neighbor nodes.
+        TODO: add a method that fetches the ID's of those nodes, rather than their properties
 
         :param match:           EITHER an integer with an internal database node id,
                                     OR a "NodeSpecs" object, as returned by match(), with data to identify a node or set of nodes
