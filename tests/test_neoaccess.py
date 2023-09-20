@@ -136,6 +136,38 @@ def test_query(db):
     assert result == [{'r': ({}, 'bought_by', {})}]
 
 
+def test_query_2(db):
+    # Explore the "single_row" flag for query()
+
+    db.empty_dbase(drop_indexes=True, drop_constraints=True)
+
+    q = "MATCH (n) RETURN n"    # Query to locate all nodes
+
+    result = db.query(q, single_row=True)
+    assert result is None       # No records returned
+
+    db.create_node(labels="car", properties={})     # A record with no properties
+
+    result = db.query(q, single_row=True)
+    assert result == {'n': {}}      # Note how this differs from the previous case of no records found
+
+    q = "MATCH (n) RETURN n.color AS color"
+    result = db.query(q, single_row=True)
+    assert result == {"color": None}
+
+    # Add a 1st boat
+    db.create_node(labels="boat", properties={"type": "sloop"})
+    q = "MATCH (n :boat) RETURN n.type AS boat_type"
+    result = db.query(q, single_row=True)
+    assert result == {"boat_type": "sloop"}
+
+    # Add a 2nd boat
+    db.create_node(labels="boat", properties={"type": "ketch"})
+    q = "MATCH (n :boat) RETURN n.type AS boat_type ORDER BY n.type"
+    result = db.query(q, single_row=True)
+    assert result == {"boat_type": "ketch"}
+
+
 
 def test_query_extended(db):
     db.empty_dbase(drop_indexes=True, drop_constraints=True)

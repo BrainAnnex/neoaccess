@@ -1,6 +1,6 @@
 from neo4j import GraphDatabase                         # The Neo4j python connectivity library "Neo4j Python Driver"
 from neo4j import __version__ as neo4j_driver_version   # The version of the Neo4j driver being used
-from neo4j.time import DateTime, Date                   # to convert neo4j.time.DateTime's to python datetimes (and Dates)
+from neo4j.time import DateTime                         # to convert neo4j.time.DateTime's to python datetimes (and Dates)
 import neo4j.graph                                      # To check returned data types
 from .cypher_utils import CypherUtils, NodeSpecs        # Helper classes for NeoAccess
 import math
@@ -65,7 +65,7 @@ from typing import Union, List, Tuple
 
 class NeoAccessCore:
     """
-    IMPORTANT : for versions 4.x of the Neo4j database
+    IMPORTANT : for versions 4.4 of the Neo4j database
 
     A thin wrapper around the Neo4j python connectivity library "Neo4j Python Driver",
     which is documented at: https://neo4j.com/docs/api/python-driver/current/api.html
@@ -238,14 +238,21 @@ class NeoAccessCore:
             * in case of queries that alter the database (and may or may not return values),
               use update_query() instead, in order to retrieve information about the effects of the operation
 
-        :param q:       A Cypher query
-        :param data_binding:  An optional Cypher dictionary
-                        EXAMPLE, assuming that the cypher string contains the substrings "$node_id":
-                                {'node_id': 20}
-        :param single_row:      Return a dictionary with just the first (0-th) result row, if present - or {} in case of no results
-                                TODO: change to None, to distinguish from scenario of finding a property-less node (TEST!)
+        :param q:               A string with a Cypher query
+        :param data_binding:    An optional Cypher dictionary
+                                EXAMPLE, assuming that the cypher string contains the substrings "$node_id":
+                                        {'node_id': 20}
 
-        :param single_cell:     (OPTIONAL) Meant in situations where only 1 node (record) is expected, and one wants only 1 specific field of that record.
+        :param single_row:      Return a dictionary containing just the first (0-th) result row, if present,
+                                    or None in case of no results.
+                                    Note that if the query returns multiple records, the picked one
+                                    will be arbitrary, unless an ORDER BY is included in the query
+                                    EXAMPLES:
+                                        {"brand": "Toyota", "color": "White"}
+                                        {'n': {}}
+
+        :param single_cell:     (OPTIONAL) Meant in situations where only 1 node (record) is expected,
+                                and one wants only 1 specific field of that record.
                                 If provided, return the value of the field by that name in the first returned record
                                 Note: this will be None if there are no results, or if the first (0-th) result row lacks a key with this name
                                 TODO: test and give examples.  single_cell="name" will return result[0].get("name")
@@ -296,7 +303,7 @@ class NeoAccessCore:
         # Deal with empty result lists
         if len(data_as_list) == 0:  # If no results were produced
             if single_row:
-                return {}           # representing an empty record
+                return None
             if single_cell:
                 return None
             return []
@@ -561,11 +568,11 @@ class NeoAccessCore:
 
 class NeoAccess(NeoAccessCore):
     """
-    IMPORTANT : for versions 4.x of the Neo4j database
+    IMPORTANT : for versions 4.4 of the Neo4j database
 
     High-level class to interface with the Neo4j graph database from Python.
 
-    Mostly tested on versions 4.3 and 4.4 of Neo4j Community version, but should work with other 4.x versions, too.
+    Tested on version 4.4 of Neo4j Community version, but should work with other 4.x versions, too.
     NOT tested on any other major version of Neo4j; in particular, NOT tested with version 5
 
     This class is a layer above its parent class "NeoAccessCore",
