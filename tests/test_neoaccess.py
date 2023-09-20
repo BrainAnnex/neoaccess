@@ -82,6 +82,7 @@ def test_connect(db):
 
 def test_version(db):
     assert type (db.version()) == str
+    assert db.version() != ""
 
 
 

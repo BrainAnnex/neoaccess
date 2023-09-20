@@ -85,6 +85,7 @@ class NeoAccessCore:
                  credentials=(os.getenv("NEO4J_USER"), os.getenv("NEO4J_PASSWORD")),
                  apoc=False,
                  debug=False,
+                 profiling=False,
                  autoconnect=True):
         """
         If unable to create a Neo4j driver object, raise an Exception
@@ -101,19 +102,30 @@ class NeoAccessCore:
         :param debug:       Flag indicating whether a debug mode is to be used by all methods of this class
         :param autoconnect  Flag indicating whether the class should establish connection to database at initialization
         """
-        self.debug = debug
+        self.profiling = profiling  # If True, it'll print all the Cypher queries being executed,
+                                    #   prior to their execution
+        self.debug = debug          # If True, all the Cypher queries will get printed (just like done by profiling),
+                                    #   but no database operations will actually be performed,
+                                    #   and some additional info will be printed
 
-        self.host = host    # TODO: validate that host starts with "bolt" or "neo4j"
-                            # TODO: maybe accept a host name without port number, and default port to 7687
+        self.host = host            # It must start with "bolt" or "neo4j"
+
         self.credentials = credentials
 
         self.apoc = apoc
+
+        self.driver = None
+
+
+        assert ("bolt" in host) or ("neo4j" in host), \
+                        "`host` argument must start with `bolt` or `neo4j`"
+                        # TODO: check that substrings actual occur at start, after trimming blanks.
+                        # TODO: maybe accept a host name without port number, and default port to 7687
+
+
         if self.debug:
             print ("~~~~~~~~~ Initializing NeoAccess object ~~~~~~~~~")
 
-        self.profiling = False      # If set to True, it'll print all the Cypher queries being executed
-
-        self.driver = None
         if autoconnect:
             # Attempt to establish a connection to the Neo4j database, and to create a driver object
             self.connect()
@@ -132,8 +144,6 @@ class NeoAccessCore:
             user, password = self.credentials  # This unpacking will work whether the credentials were passed as a tuple or list
             if self.debug:
                 print(f"Attempting to connect to Neo4j host '{self.host}', with username '{user}'...")
-            #else:
-                #print(f"Attempting to connect to Neo4j database...")
 
             self.driver = GraphDatabase.driver(self.host,
                                                auth=(user, password))   # Object to connect to Neo4j's Bolt driver for Python
@@ -152,14 +162,14 @@ class NeoAccessCore:
             self.test_dbase_connection()
         except Exception as ex:
             (exc_type, _, _) = sys.exc_info()   # This is for the purpose of giving more informative error messages;
-            # for example, a bad database passwd will show "<class 'neo4j.exceptions.AuthError'>"
+                                                # for example, a bad database passwd will show "<class 'neo4j.exceptions.AuthError'>"
             error_msg = f"Unable to access the Neo4j database; " \
                         f"CHECK THE DATABASE USERNAME/PASSWORD in the credentials your provided: {str(exc_type)} - {ex}"
             raise Exception(error_msg)
 
 
         if self.debug:
-            print(f"Connection to host '{self.host}' established")
+            print(f"Connection to host '{self.host}' established.  *** IN DEBUG MODE : NO DATABASE OPERATIONS WILL BE PERFORMED ***")
         else:
             print("Connection to Neo4j database established.")
 
@@ -180,7 +190,7 @@ class NeoAccessCore:
 
     def version(self) -> str:
         """
-        Return the version of the Neo4j driver being used.  EXAMPLE: "4.3.9"
+        Return the version of the Neo4j driver being used.  EXAMPLE: "4.4.11"
 
         :return:    A string with the version number
         """
@@ -198,6 +208,7 @@ class NeoAccessCore:
         """
         if self.driver is not None:
             self.driver.close()
+
 
 
 
@@ -263,12 +274,15 @@ class NeoAccessCore:
                             Cypher creates nodes (without returning them)
                                     -> empty list
         """
+        if self.profiling or self.debug:
+            self.debug_query_print(q, data_binding, method="query")
+            if self.debug:
+                print(f"    single_row: {single_row} , single_cell: `{single_cell}` , single_column : `{single_column}`")
+                return
 
         # Start a new session, use it, and then immediately close it
         with self.driver.session() as new_session:
             result = new_session.run(q, data_binding)
-            if self.profiling:
-                print("-- query() PROFILING ----------\n", q, "\n", data_binding)
 
             # Note: A neo4j.Result object (printing it, shows an object of type "neo4j.work.result.Result")
             #       See https://neo4j.com/docs/api/python-driver/current/api.html#neo4j.Result
@@ -347,11 +361,15 @@ class NeoAccessCore:
                                      'neo4j_end_node': <Node id=14 labels=frozenset() properties={}>,
                                      'neo4j_type': 'bought_by'}]
         """
+        if self.profiling or self.debug:
+            self.debug_query_print(q, data_binding, method="query_extended")
+            if self.debug:
+                print(f"    flatten: {flatten} , fields_to_exclude: {fields_to_exclude}")
+                return
+
         # Start a new session, use it, and then immediately close it
         with self.driver.session() as new_session:
             result = new_session.run(q, data_binding)
-            if self.profiling:
-                print("-- query_extended() PROFILING ----------\n", q, "\n", data_binding)
 
             # Note: A neo4j.Result iterable object (printing it, shows an object of type "neo4j.work.result.Result")
             #       See https://neo4j.com/docs/api/python-driver/current/api.html#neo4j.Result
@@ -454,12 +472,14 @@ class NeoAccessCore:
                                 indexes_added, indexes_removed, constraints_added, constraints_removed
                                 More info:  https://neo4j.com/docs/api/python-driver/current/api.html#neo4j.SummaryCounters
         """
+        if self.profiling or self.debug:
+            self.debug_query_print(q, data_binding, method="update_query")
+            if self.debug:
+                 return {}
 
         # Start a new session, use it, and then immediately close it
         with self.driver.session() as new_session:
             result = new_session.run(q, data_binding)
-            if self.profiling:
-                print("-- update_query() PROFILING ----------\n", q, "\n", data_binding)
 
             # Note: result is a neo4j.Result iterable object
             #       See https://neo4j.com/docs/api/python-driver/current/api.html#neo4j.Result
@@ -471,7 +491,7 @@ class NeoAccessCore:
             # See https://neo4j.com/docs/api/python-driver/current/api.html#neo4j.ResultSummary
 
             if self.debug:
-                print("In update_query(). Attributes of ResultSummary object:")
+                print("    In update_query(). Attributes of ResultSummary object:")
                 # Show as dictionary, which is available in info.__dict__
                 for k, v in info.__dict__.items():
                     print(f"    {k} -> {v}")
@@ -504,6 +524,32 @@ class NeoAccessCore:
             stats_dict['returned_data'] = data_as_list  # Add an extra entry to the dictionary, with the data returned by the query
 
             return stats_dict
+
+
+
+    def debug_query_print(self, q: str, data_binding=None, method=None) -> None:
+        """
+        Print out the given Cypher query
+        (and, optionally, its data binding and/or the name of the calling method)
+
+        :param q:               String with Cypher query
+        :param data_binding:    OPTIONAL dictionary
+        :param method:          OPTIONAL string with the name of the calling method
+                                    EXAMPLE:  "foo"
+        :return:                None
+        """
+        if method:
+            print(f"\nIn {method}().  Query:")
+        else:
+            print(f"Query:")
+
+        print(f"    {q}")
+
+        if data_binding:
+            print("Data binding:")
+            print(f"    {data_binding}")
+
+        print()
 
 
 
@@ -553,6 +599,7 @@ class NeoAccess(NeoAccessCore):
         :return:            None
         """
         CypherUtils.assert_valid_internal_id(internal_id)
+
 
 
 
@@ -725,8 +772,6 @@ class NeoAccess(NeoAccessCore):
         if limit:
             cypher += f" LIMIT {limit}"
 
-        self.debug_query_print(cypher, data_binding, "get_nodes")
-
 
         # Note: the flatten=True takes care of returning just the fields of the matched node "n",
         #       rather than dictionaries indexes by "n"
@@ -863,7 +908,6 @@ class NeoAccess(NeoAccessCore):
         (node, where, data_binding, _) = match_structure.unpack_match()
 
         q = f"MATCH {node} {CypherUtils.prepare_where(where)} RETURN id(n) AS INTERNAL_ID"
-        self.debug_query_print(q, data_binding, "get_node_internal_id")
 
         result = self.query(q, data_binding, single_column="INTERNAL_ID")
 
@@ -932,8 +976,6 @@ class NeoAccess(NeoAccessCore):
         # Assemble the complete Cypher query
         q = f"CREATE (n {cypher_labels} {attributes_str}) RETURN n"
 
-        self.debug_query_print(q, data_dictionary, "create_node")
-
         result_list = self.query_extended(q, data_dictionary, flatten=True)  # TODO: switch to update_query(), and verify the creation
         if len(result_list) != 1:
             raise Exception("NeoAccess.create_node(): failed to create the requested new node")
@@ -972,7 +1014,6 @@ class NeoAccess(NeoAccessCore):
         # Assemble the complete Cypher query
         q = f"MERGE (n {cypher_labels} {attributes_str}) RETURN id(n) AS internal_id"
 
-        self.debug_query_print(q, data_dictionary, "merge_node")
 
         result = self.update_query(q, data_dictionary)
 
@@ -1105,7 +1146,7 @@ class NeoAccess(NeoAccessCore):
             f"NeoAccess.create_node_with_links(): The argument `links` must be a list or None; instead, it's of type {type(links)}"
 
         if self.debug:
-            print(f"NeoAccess.In create_node_with_links().  labels: {labels}, links: {links}, properties: {properties}")
+            print(f"In create_node_with_links().  labels: {labels}, links: {links}, properties: {properties}")
 
 
         # Prepare strings and a data-binding dictionary suitable for inclusion in a Cypher query,
@@ -1138,8 +1179,6 @@ class NeoAccess(NeoAccessCore):
 
         # Put all the parts of the Cypher query together (*except* for a RETURN statement)
         q += "\nRETURN id(n) AS internal_id"
-        self.debug_print(f"\n{q}\n")
-        self.debug_print(data_binding)
         # EXAMPLE of q:
         '''
         MATCH (ex0), (ex1)
@@ -1485,7 +1524,6 @@ class NeoAccess(NeoAccessCore):
         (node, where, data_binding, _) = match_structure.unpack_match()
 
         q = f"MATCH {node} {CypherUtils.prepare_where(where)} DETACH DELETE n"
-        self.debug_query_print(q, data_binding, "delete_nodes")
 
         stats = self.update_query(q, data_binding)
         number_nodes_deleted = stats.get("nodes_deleted", 0)
@@ -1531,7 +1569,6 @@ class NeoAccess(NeoAccessCore):
         for label in delete_labels:
             if not (label in keep_labels):
                 q = f"MATCH (x:`{label}`) DETACH DELETE x"
-                self.debug_query_print(q, method="delete_nodes_by_label")
                 self.query(q)       # TODO: switch to update_query() and return the number of nodes deleted
 
 
@@ -1650,11 +1687,8 @@ class NeoAccess(NeoAccessCore):
         # Example of data binding:
         #       {'n_par_1': 123, 'n_par_2': 7500, 'color': 'white', 'price': 7000}
 
-        self.debug_query_print(cypher, data_binding, "set_fields")
-
-        #self.query(cypher, data_binding)
         stats = self.update_query(cypher, data_binding)
-        #print(stats)
+
         number_properties_set = stats.get("properties_set", 0)
         return number_properties_set
 
@@ -1740,7 +1774,6 @@ class NeoAccess(NeoAccessCore):
         # Merge the data-binding dict's
         combined_data_binding = CypherUtils.combined_data_binding(cypher_match_from, cypher_match_to)
 
-        self.debug_query_print(q, combined_data_binding, "add_links")
 
         result = self.update_query(q, combined_data_binding)
         if self.debug:
@@ -1850,7 +1883,6 @@ class NeoAccess(NeoAccessCore):
         # Merge the data-binding dict's
         combined_data_binding = CypherUtils.combined_data_binding(match_from, match_to)
 
-        self.debug_query_print(q, combined_data_binding, "remove_links")
 
         result = self.update_query(q, combined_data_binding)
         if self.debug:
@@ -1932,8 +1964,6 @@ class NeoAccess(NeoAccessCore):
         # Merge the data-binding dict's
         combined_data_binding = CypherUtils.combined_data_binding(match_from, match_to)
 
-        self.debug_query_print(q, combined_data_binding, "number_of_links")
-
         result = self.query(q, combined_data_binding)
         if self.debug:
             print("    result of query in number_of_links(): ", result)
@@ -1973,8 +2003,6 @@ class NeoAccess(NeoAccessCore):
             MERGE (node_start) -[:{rel_name_new}]-> (node_new)
             DELETE rel         
             '''
-
-        self.debug_query_print(q, method="reattach_node")
 
         result = self.update_query(q)
         #print("result of update_query in reattach_node(): ", result)
@@ -2019,7 +2047,6 @@ class NeoAccess(NeoAccessCore):
         cypher_dict["node_id1"] = node_id1
         cypher_dict["node_id2"] = node_id2
 
-        self.debug_query_print(q, cypher_dict, "link_nodes_by_ids")
 
         self.query(q, cypher_dict)
 
@@ -2105,8 +2132,6 @@ class NeoAccess(NeoAccessCore):
 
         q += CypherUtils.prepare_where(where) + " RETURN neighbor"
 
-        self.debug_query_print(q, data_binding, "follow_links")
-
         result = self.query(q, data_binding, single_column='neighbor')
 
         return result
@@ -2147,8 +2172,6 @@ class NeoAccess(NeoAccessCore):
             raise Exception(f"count_links(): argument `rel_dir` must be one of: 'IN', 'OUT', 'BOTH'; value passed was `{rel_dir}`")
 
         q += CypherUtils.prepare_where(where) + " RETURN count(neighbor) AS link_count"
-
-        self.debug_query_print(q, data_binding, "count_links")
 
         return self.query(q, data_binding, single_cell="link_count")
 
@@ -2365,10 +2388,6 @@ class NeoAccess(NeoAccessCore):
 
         if (label, key) not in existing_standard_name_pairs:
             q = f'CREATE INDEX `{label}.{key}` FOR (s:`{label}`) ON (s.`{key}`)'
-            if self.debug:
-                print(f"""
-                query: {q}
-                """)
             self.query(q)
             return True
         else:
@@ -2693,12 +2712,10 @@ class NeoAccess(NeoAccessCore):
                     '''
                 cypher_dict = {'data':record_list}
 
-            if self.debug:
-                self.debug_query_print(q, data_binding=cypher_dict, method="load_df")
-            else:
-                res_chunk = self.query(q, cypher_dict, single_column="node_id") # A (possibly empty) list of internal ID's
-                res += res_chunk
 
+            res_chunk = self.query(q, cypher_dict, single_column="node_id") # A (possibly empty) list of internal ID's
+            res += res_chunk
+        # END for loop
 
         return res
 
@@ -2954,7 +2971,6 @@ class NeoAccess(NeoAccessCore):
             RETURN nodes, relationships, properties, data
         '''
 
-        #self.debug_print(cypher, method="export_nodes_rels_json", force_output=True)
         result = self.query(cypher)     # It returns a list with a single element
         #print("In export_nodes_rels_json(): result = ", result)
 
@@ -3309,37 +3325,6 @@ class NeoAccess(NeoAccessCore):
     #####################################################################################################
 
 
-    def debug_query_print(self, q: str, data_binding=None, method=None, force_output=False) -> None:
-        """
-        Print out some info on the given Cypher query
-        (and, optionally, on the passed data binding and/or the name of the calling method,
-        BUT only if self.debug is True, or if force_output is True
-
-        :param q:               String with Cypher query
-        :param data_binding:    OPTIONAL dictionary
-        :param method:          OPTIONAL string with the name of the calling method
-        :param force_output:    If True, print out regardless of the value of the self.debug property
-        :return:                None
-        """
-
-        if not (self.debug or force_output):
-            return
-
-        if method:
-            print(f"\nIn {method}().  Query:")
-        else:
-            print(f"Query:")
-
-        print(f"    {q}")
-
-        if data_binding:
-            print("Data binding:")
-            print(f"    {data_binding}")
-
-        print()
-
-
-
     def debug_print(self, info: str, trim=False) -> None:
         """
         If the class' property "debug" is set to True,
@@ -3408,4 +3393,3 @@ class NeoAccess(NeoAccessCore):
         :return:
         """
         return "local"
-
