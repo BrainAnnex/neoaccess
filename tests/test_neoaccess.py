@@ -16,6 +16,8 @@ from src.neoaccess import neoaccess as neo_access
 from utilities.comparisons import compare_unordered_lists, compare_recordsets
 import os
 import pandas as pd
+import numpy as np
+import neo4j.time
 
 
 
@@ -507,7 +509,7 @@ def test_get_df(db):
 
     # Create and load a test Pandas dataframe with 2 columns and 2 rows
     df_original = pd.DataFrame({"patient_id": [1, 2], "name": ["Jack", "Jill"]})
-    db.load_pandas(df_original, label="A")
+    db.load_pandas(df_original, labels="A")
 
     match = db.match(labels="A")
     df_new = db.get_df(match=match)
@@ -1410,7 +1412,8 @@ def test_remove_edges(db):
         MERGE (c)-[:REMEMBERED_BY {since: 2020}]->(o)
     '''
     result = db.update_query(add_query)
-    assert result == {'relationships_created': 1, 'properties_set': 1, 'returned_data': []}
+    assert result == {'_contains_updates': True, 'relationships_created': 1, 'properties_set': 1, 'returned_data': []}
+    # Note: '_contains_updates': True  was added in version 4.4 of Neo4j
 
     # Also, add a 3rd node, and another "OWNED_BY" relationship, this time affecting the 3rd node
     add_query = '''
@@ -1418,7 +1421,9 @@ def test_remove_edges(db):
         MERGE (c)-[:OWNED_BY]->(o :owner {name: 'Val'})
     '''
     result = db.update_query(add_query)
-    assert result == {'labels_added': 1, 'relationships_created': 1, 'nodes_created': 1, 'properties_set': 1, 'returned_data': []}
+    assert result == {'_contains_updates': True, 'labels_added': 1, 'relationships_created': 1, 'nodes_created': 1,
+                      'properties_set': 1, 'returned_data': []}
+    # Note: '_contains_updates': True  was added in version 4.4 of Neo4j
 
     # We now have a car with 2 owners: an "OWNED_BY" relationship to one of them,
     # and 3 relationships (incl. two with the same name "REMEMBERED_BY") to the other one
@@ -1475,7 +1480,8 @@ def test_remove_edges(db):
         MERGE (c)-[:DRIVEN_BY]->(o)
         '''
     result = db.update_query(add_query)
-    assert result == {'relationships_created': 1, 'returned_data': []}
+    assert result == {'_contains_updates': True, 'relationships_created': 1, 'returned_data': []}
+    # Note: '_contains_updates': True  was added in version 4.4 of Neo4j
 
     find_query = '''
         MATCH (c:car)-[r]->(o:owner {name: 'Val'}) 
@@ -1509,8 +1515,9 @@ def test_remove_edges_2(db):
         MERGE (c2)-[:OWNED_BY]->(p2)
     '''
     result = db.update_query(q)
-    assert result == {'labels_added': 4, 'relationships_created': 4,
+    assert result == {'_contains_updates': True, 'labels_added': 4, 'relationships_created': 4,
                       'nodes_created': 4, 'properties_set': 4, 'returned_data': []}
+    # Note: '_contains_updates': True  was added in version 4.4 of Neo4j
 
     match_white_car = db.match(labels="car", properties={"color": "white"}, dummy_node_name="from")  # 1-node match
     match_all_people = db.match(labels="person", dummy_node_name="to")                               # 2-node match
@@ -1980,62 +1987,253 @@ def test_drop_all_constraints(db):
 
 ###  ~ READ IN DATA from PANDAS ~
 
-def test_load_pandas(db):
+def test_load_df_1(db):
     db.empty_dbase(drop_indexes=True, drop_constraints=True)
 
+    # Start with a single imported node
     df = pd.DataFrame([[123]], columns = ["col1"])  # One row, one column
-    db.load_pandas(df, "A")
-    match_A = db.match(labels="A")
+    db.load_df(df, labels="A", ignore_nan=False)
+    match_A = db.match(labels="A")  # To pull all nodes with a label "A"
     result = db.get_nodes(match_A)
     assert result == [{'col1': 123}]
 
+    # Append a new single node
     df = pd.DataFrame([[999]], columns = ["col1"])
-    db.load_pandas(df, "A")
+    db.load_df(df, labels="A", ignore_nan=True)
     result = db.get_nodes(match_A)
     expected = [{'col1': 123}, {'col1': 999}]
     assert compare_recordsets(result, expected)
 
+    # Append a new single node
     df = pd.DataFrame([[2222]], columns = ["col2"])
-    db.load_pandas(df, "A")
+    db.load_df(df, labels="A")
     result = db.get_nodes(match_A)
     expected = [{'col1': 123}, {'col1': 999}, {'col2': 2222}]
     assert compare_recordsets(result, expected)
 
+    # Append a new single node
     df = pd.DataFrame([[3333]], columns = ["col3"])
-    db.load_pandas(df, "B")
+    db.load_df(df, labels="B")
     A_nodes = db.get_nodes(match_A)
     expected_A = [{'col1': 123}, {'col1': 999}, {'col2': 2222}]
     assert compare_recordsets(A_nodes, expected_A)
-    match_B = db.match(labels="B")
+    match_B = db.match(labels="B")  # To pull all nodes with a label "B"
     B_nodes = db.get_nodes(match_B)
     assert B_nodes == [{'col3': 3333}]
 
-    db.load_pandas(df, "B")    # Re-add the same record
+
+    db.load_df(df, labels="B", merge_primary_key=None)    # Re-add the same identical record
     B_nodes = db.get_nodes(match_B)
     assert B_nodes == [{'col3': 3333}, {'col3': 3333}]
 
     # Add a 2x2 dataframe
     df = pd.DataFrame({"col3": [100, 200], "name": ["Jack", "Jill"]})
-    db.load_pandas(df, "A")
+    db.load_df(df, labels="A")
     A_nodes = db.get_nodes(match_A)
     expected = [{'col1': 123}, {'col1': 999}, {'col2': 2222}, {'col3': 100, 'name': 'Jack'}, {'col3': 200, 'name': 'Jill'}]
     assert compare_recordsets(A_nodes, expected)
 
     # Change the column names during import
     df = pd.DataFrame({"alternate_name": [1000]})
-    db.load_pandas(df, "B", rename={"alternate_name": "col3"})     # Map "alternate_name" into "col3"
+    db.load_df(df, labels="B", rename={"alternate_name": "col3"})     # Map "alternate_name" into "col3"
     B_nodes = db.get_nodes(match_B)
     expected_B = [{'col3': 3333}, {'col3': 3333}, {'col3': 1000}]
     assert compare_recordsets(B_nodes, expected_B)
 
-    # Test primary_key with merge
+    # Add 2 more records, with double labels
     df = pd.DataFrame({"patient_id": [100, 200], "name": ["Jack", "Jill"]})
-    db.load_pandas(df, "X")
-    match_X = db.match(labels="X")
-    X_nodes = db.get_nodes(match_X)
-    expected_X = [{'patient_id': 100, 'name': 'Jack', }, {'patient_id': 200, 'name': 'Jill'}]
-    assert compare_recordsets(X_nodes, expected_X)
+    db.load_df(df, labels=["X", "Y"])
+    match_X_Y = db.match(labels=["X", "Y"])
+    X_Y_nodes = db.get_nodes(match_X_Y)
+    expected_X_Y = [{'patient_id': 100, 'name': 'Jack', }, {'patient_id': 200, 'name': 'Jill'}]
+    assert compare_recordsets(X_Y_nodes, expected_X_Y)
 
+
+def test_load_df_2(db):
+    db.empty_dbase(drop_indexes=True, drop_constraints=True)
+
+    # Add 3 records
+    df = pd.DataFrame({"scientist_id": [10, 20, 30], "name": ["Julian", "Jack", "Jill"], "location": ["CA", "NY", "DC"]})
+    id_list = db.load_df(df, labels="scientist", merge_primary_key=None)
+
+    q = f'''
+        MATCH (n :scientist) 
+        WHERE id(n) IN {id_list}
+        RETURN n
+        '''
+    res = db.query(q, single_column="n")
+    expected = [{'name': 'Julian', 'location': 'CA', 'scientist_id': 10},
+                {'name': 'Jack', 'location': 'NY', 'scientist_id': 20},
+                {'name': 'Jill', 'location': 'DC', 'scientist_id': 30}]
+    assert compare_recordsets(res, expected)
+
+    # Update the "Julian" node, indexed by scientist_id (we'll modify the "name" of that node, and add a "specialty" field;
+    # notice that the "location" field doesn't get altered)
+    df = pd.DataFrame({"scientist_id": [10], "name": ["Julian W"], "specialty": ["Systems Biology"]})
+    db.load_df(df, labels="scientist", merge_primary_key="scientist_id", merge_overwrite=False)
+    q = "MATCH (n :scientist) RETURN n"
+    res = db.query(q, single_column="n")
+    expected = [{'specialty': 'Systems Biology', 'name': 'Julian W', 'location': 'CA', 'scientist_id': 10},
+                {'name': 'Jack', 'location': 'NY', 'scientist_id': 20},
+                {'name': 'Jill', 'location': 'DC', 'scientist_id': 30}]
+    assert compare_recordsets(res, expected)
+
+    # This time, completely replace the "Julian" node, indexed by scientist_id.
+    # Notice how all the previous fields that aren't being set now, are gone ("specialty" and "location")
+    df = pd.DataFrame({"scientist_id": [10], "name": ["Jules"]})
+    db.load_df(df, labels="scientist", merge_primary_key="scientist_id", merge_overwrite=True)
+    q = "MATCH (n :scientist) RETURN n"
+    res = db.query(q, single_column="n")
+    expected = [{'name': 'Jules', 'scientist_id': 10},
+                {'name': 'Jack', 'location': 'NY', 'scientist_id': 20},
+                {'name': 'Jill', 'location': 'DC', 'scientist_id': 30}]
+    assert compare_recordsets(res, expected)
+
+
+    # Verify that a database Index got created as a result of using merge_primary_key
+    all_indexes = db.get_indexes()
+    assert len(all_indexes) == 1
+    index_as_list = list(all_indexes.iloc[0])
+    assert index_as_list == [['scientist'], 'scientist.scientist_id', ['scientist_id'], 'BTREE', 'NONUNIQUE']
+
+
+
+def test_load_df_3(db):
+    db.empty_dbase(drop_indexes=True, drop_constraints=True)
+
+    # First group on nodes to import
+    ages = np.array([13, 25, 19, 99])
+    series_1 = pd.Series(ages)    # A series with no name; during the import, "value" will be used
+    id_list = db.load_df(series_1, labels="age")
+
+    q = f'''
+        MATCH (n :age) 
+        WHERE id(n) IN {id_list}
+        RETURN n
+        '''
+    res = db.query(q, single_column="n")
+    expected = [{'value': 13}, {'value': 25}, {'value': 19}, {'value': 99}]
+    assert compare_recordsets(res, expected)
+
+
+    # More nodes to import
+    prices = np.array([145, 512, 811])
+    series_2 = pd.Series(prices, name="Discounted Price")   # This series has a bane
+    id_list_2 = db.load_df(series_2, labels="store prices")
+
+    # First, check that the old nodes are still there
+    res = db.query(q, single_column="n")
+    expected = [{'value': 13}, {'value': 25}, {'value': 19}, {'value': 99}]
+    assert compare_recordsets(res, expected)
+    # Now, look for the new nodes
+    q = f'''
+        MATCH (n :`store prices`) 
+        WHERE id(n) IN {id_list_2}
+        RETURN n
+        '''
+    res = db.query(q, single_column="n")
+    expected = [{'Discounted Price': 145}, {'Discounted Price': 512}, {'Discounted Price': 811}]
+    assert compare_recordsets(res, expected)
+
+
+def test_load_df_4(db):
+    db.empty_dbase(drop_indexes=True, drop_constraints=True)
+
+    # First group on nodes to import, with option to ignore NaN's
+    df = pd.DataFrame({"name": ["pot", "pan", "microwave"], "price": [12, np.nan, 55]})
+    db.load_df(df, labels="inventory", ignore_nan=True)
+
+    imported_records = db.get_nodes(db.match(labels="inventory"))
+    expected = [{'price': 12.0, 'name': 'pot'}, {'name': 'pan'}, {'price': 55.0, 'name': 'microwave'}]
+    assert compare_recordsets(imported_records, expected)
+
+
+    # Re-import the same dataframe (with a different label), but this time not ignoring NaN's
+    db.load_df(df, labels="test", ignore_nan=False)
+
+    imported_records = db.get_nodes(db.match(labels="test"), order_by="name")
+    expected = [{'price': 55.0, 'name': 'microwave'}, {'price': np.nan, 'name': 'pan'}, {'price': 12.0, 'name': 'pot'}]
+    # Check the records not involving NaN
+    assert imported_records[0] == expected[0]
+    assert imported_records[2] == expected[2]
+    # Check the NaN record
+    assert imported_records[1]["name"] == expected[1]["name"]
+    assert np.isnan(imported_records[1]["price"])
+
+
+def test_load_df_5(db):
+    db.empty_dbase(drop_indexes=True, drop_constraints=True)
+
+    # First group on 5 nodes to import
+    df = pd.DataFrame({"name": ["A", "B", "C", "D", "E"], "price": [1, 2, 3, 4, 5]})
+    db.load_df(df, labels="inventory")
+
+    imported_records = db.get_nodes(db.match(labels="inventory"))
+    expected = [{'price': 1, 'name': 'A'}, {'price': 2, 'name': 'B'}, {'price': 3, 'name': 'C'}, {'price': 4, 'name': 'D'}, {'price': 5, 'name': 'E'}]
+    assert compare_recordsets(imported_records, expected)
+
+
+    # Re-import them (with a different label) in tiny "import chunks" of size 2
+    db.load_df(df, labels="test", max_chunk_size=2)
+
+    imported_records = db.get_nodes(db.match(labels="test"))
+    expected = [{'price': 1, 'name': 'A'}, {'price': 2, 'name': 'B'}, {'price': 3, 'name': 'C'}, {'price': 4, 'name': 'D'}, {'price': 5, 'name': 'E'}]
+    assert compare_recordsets(imported_records, expected)
+    # Verify that the first import is also still there
+    imported_records = db.get_nodes(db.match(labels="inventory"))
+    assert compare_recordsets(imported_records, expected)
+
+    # Verify that the data (all the 10 records) got imported as integers
+    q = "MATCH (n) WHERE toInteger(n.price) = n.price RETURN count(n) AS number_integers"
+    res = db.query(q, single_cell="number_integers")
+    assert res == 10
+
+
+def test_load_df_6(db):
+    db.empty_dbase(drop_indexes=True, drop_constraints=True)
+
+    # Dataframe with group of dates, turned into a datetime column
+    df = pd.DataFrame({"name": ["A", "B", "C"], "arrival date": ["2020-01-01", "2020-01-11", "2020-01-21"]})
+    df['arrival date'] = pd.to_datetime(df['arrival date'])
+    id_list = db.load_df(df, labels="events")
+
+    for node_id in id_list:
+        q = f'''MATCH (n :events) WHERE id(n) = {node_id} RETURN apoc.meta.type(n.`arrival date`) AS dtype'''
+        res = db.query(q, single_cell="dtype")
+        assert res == "LocalDateTime"
+
+
+
+def test_pd_datetime_to_neo4j_datetime(db):
+    # Prepare a dataframe with group of dates, turned into a datetime column
+    df = pd.DataFrame({"name": ["A", "B", "C"], "my_date": ["2023-01-01", np.nan, "2023-01-21"]})
+    df['my_date'] = pd.to_datetime(df['my_date'])
+
+    # First, check the original dataframe
+    date_col = list(df.my_date) # [Timestamp('2023-01-01 00:00:00'), Timestamp('2023-01-11 00:00:00'), ...]
+    first_dt = date_col[0]      # Timestamp('2023-01-01 00:00:00')
+    assert first_dt == pd.Timestamp('2023-01-01 00:00:00')
+
+
+    result = db.pd_datetime_to_neo4j_datetime(df)
+
+    result_col = list(result.my_date)   # [neo4j.time.DateTime(2023, 1, 1, 0, 0, 0, 0), ... ]
+
+    assert result_col[0] == neo4j.time.DateTime(2023, 1, 1, 0, 0, 0, 0)
+    assert result_col[1] == None
+    assert result_col[2] == neo4j.time.DateTime(2023, 1, 21, 0, 0, 0, 0)
+
+    assert id(df) != id(result)     # A clone of the original dataframe was created
+
+
+    # If a dataframe is using strings rather than datetime value, no change will be made to it
+    df = pd.DataFrame({"name": ["A", "B"], "my_date": ["2023-01-01", "2023-01-21"]})
+
+    result = db.pd_datetime_to_neo4j_datetime(df)
+    result_col = list(result.my_date)
+    assert result_col == ['2023-01-01', '2023-01-21']
+
+    assert id(df) == id(result)     # No cloning took place
 
 
 
