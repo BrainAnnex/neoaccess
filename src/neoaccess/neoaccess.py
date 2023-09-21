@@ -85,7 +85,6 @@ class NeoAccessCore:
                  credentials=(os.getenv("NEO4J_USER"), os.getenv("NEO4J_PASSWORD")),
                  apoc=False,
                  debug=False,
-                 profiling=False,
                  autoconnect=True):
         """
         If unable to create a Neo4j driver object, raise an Exception
@@ -99,14 +98,19 @@ class NeoAccessCore:
         :param apoc:        Flag indicating whether apoc library is used on Neo4j database to connect to
                                 Notes: APOC, if used, must also be enabled on the database.
                                 The only method currently requiring APOC is export_dbase_json()
-        :param debug:       Flag indicating whether a debug mode is to be used by all methods of this class
+        :param debug:       Flag indicating whether a debug mode is to be used :
+                                if True, all the Cypher queries, and some additional info, will get printed
         :param autoconnect  Flag indicating whether the class should establish connection to database at initialization
         """
-        self.profiling = profiling  # If True, it'll print all the Cypher queries being executed,
-                                    #   prior to their execution
-        self.debug = debug          # If True, all the Cypher queries will get printed (just like done by profiling),
-                                    #   but no database operations will actually be performed,
-                                    #   and some additional info will be printed
+
+        self.debug = debug                  # If True, all the Cypher queries, and some additional info,
+                                            # will get printed
+
+        self.block_query_execution = False  # If True, all the Cypher queries will get printed (just like done by debug),
+                                            # but no database operations will actually be performed.
+                                            # Caution: most functions will fail validations on the results
+                                            #          of the query that wasn't executed.  This option should probably
+                                            #          be combined with an Exception catch
 
         self.host = host            # It must start with "bolt" or "neo4j"
 
@@ -260,7 +264,7 @@ class NeoAccessCore:
                                     will be arbitrary, unless an ORDER BY is included in the query
 
         :param single_column:   (OPTIONAL) Name of the column of interest.
-                                If a string is provided, assemble a list (possibly empty)
+                                If provided, assemble a list (possibly empty)
                                 from all the values of that particular column all records.
                                 Note: can also be used to extract data from a particular node, for queries that return whole nodes
 
@@ -284,10 +288,10 @@ class NeoAccessCore:
                             Cypher creates nodes (without returning them)
                                     -> empty list
         """
-        if self.profiling or self.debug:
+        if self.debug or self.block_query_execution:
             self.debug_query_print(q, data_binding, method="query")
-            if self.debug:
-                print(f"    single_row: {single_row} , single_cell: `{single_cell}` , single_column : `{single_column}`")
+            print(f"    single_row: {single_row} , single_cell: `{single_cell}` , single_column : `{single_column}`")
+            if self.block_query_execution:
                 return
 
         # Start a new session, use it, and then immediately close it
@@ -371,11 +375,11 @@ class NeoAccessCore:
                                      'neo4j_end_node': <Node id=14 labels=frozenset() properties={}>,
                                      'neo4j_type': 'bought_by'}]
         """
-        if self.profiling or self.debug:
+        if self.debug or self.block_query_execution:
             self.debug_query_print(q, data_binding, method="query_extended")
-            if self.debug:
-                print(f"    flatten: {flatten} , fields_to_exclude: {fields_to_exclude}")
-                return
+            print(f"    flatten: {flatten} , fields_to_exclude: {fields_to_exclude}")
+            if self.block_query_execution:
+                return []
 
         # Start a new session, use it, and then immediately close it
         with self.driver.session() as new_session:
@@ -482,9 +486,9 @@ class NeoAccessCore:
                                 indexes_added, indexes_removed, constraints_added, constraints_removed
                                 More info:  https://neo4j.com/docs/api/python-driver/current/api.html#neo4j.SummaryCounters
         """
-        if self.profiling or self.debug:
+        if self.debug or self.block_query_execution:
             self.debug_query_print(q, data_binding, method="update_query")
-            if self.debug:
+            if self.block_query_execution:
                  return {}
 
         # Start a new session, use it, and then immediately close it
@@ -688,17 +692,16 @@ class NeoAccess(NeoAccessCore):
         RETURN count(n) AS number_of_nodes
         '''
 
-        result = self.query(q)
+        result = self.query(q, single_cell="number_of_nodes")
 
-        number_of_nodes = result[0]["number_of_nodes"]
-
-        return number_of_nodes > 0
+        return result > 0
 
 
 
-    def count_nodes(self) -> int:   # TODO: test
+    def count_nodes(self) -> int:
         """
         Compute and return the total number of nodes in the database
+        TODO: test
 
         :return:    The total number of nodes in the database
         """
