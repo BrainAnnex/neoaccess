@@ -1121,7 +1121,7 @@ def test_delete_nodes(db):
 
     # Create 5 nodes, representing cars of various colors and prices
     df = pd.DataFrame({"color": ["white", "blue", "gray", "gray", "red"], "price": [100, 200, 300, 400, 500]})
-    db.load_pandas(df, "car")
+    db.load_pandas(df, labels="car")
 
     # Add 1 airplane and a boat
     db.create_node("airplane", {"type": "747"})
@@ -2040,33 +2040,33 @@ def test_drop_all_constraints(db):
 
 ###  ~ READ IN DATA from PANDAS ~
 
-def test_load_df_1(db):
+def test_load_pandas_1(db):
     db.empty_dbase(drop_indexes=True, drop_constraints=True)
 
     # Start with a single imported node
     df = pd.DataFrame([[123]], columns = ["col1"])  # One row, one column
-    db.load_df(df, labels="A", ignore_nan=False)
+    db.load_pandas(df, labels="A", ignore_nan=False)
     match_A = db.match(labels="A")  # To pull all nodes with a label "A"
     result = db.get_nodes(match_A)
     assert result == [{'col1': 123}]
 
     # Append a new single node
     df = pd.DataFrame([[999]], columns = ["col1"])
-    db.load_df(df, labels="A", ignore_nan=True)
+    db.load_pandas(df, labels="A", ignore_nan=True)
     result = db.get_nodes(match_A)
     expected = [{'col1': 123}, {'col1': 999}]
     assert compare_recordsets(result, expected)
 
     # Append a new single node
     df = pd.DataFrame([[2222]], columns = ["col2"])
-    db.load_df(df, labels="A")
+    db.load_pandas(df, labels="A")
     result = db.get_nodes(match_A)
     expected = [{'col1': 123}, {'col1': 999}, {'col2': 2222}]
     assert compare_recordsets(result, expected)
 
     # Append a new single node
     df = pd.DataFrame([[3333]], columns = ["col3"])
-    db.load_df(df, labels="B")
+    db.load_pandas(df, labels="B")
     A_nodes = db.get_nodes(match_A)
     expected_A = [{'col1': 123}, {'col1': 999}, {'col2': 2222}]
     assert compare_recordsets(A_nodes, expected_A)
@@ -2075,39 +2075,39 @@ def test_load_df_1(db):
     assert B_nodes == [{'col3': 3333}]
 
 
-    db.load_df(df, labels="B", merge_primary_key=None)    # Re-add the same identical record
+    db.load_pandas(df, labels="B", merge_primary_key=None)    # Re-add the same identical record
     B_nodes = db.get_nodes(match_B)
     assert B_nodes == [{'col3': 3333}, {'col3': 3333}]
 
     # Add a 2x2 dataframe
     df = pd.DataFrame({"col3": [100, 200], "name": ["Jack", "Jill"]})
-    db.load_df(df, labels="A")
+    db.load_pandas(df, labels="A")
     A_nodes = db.get_nodes(match_A)
     expected = [{'col1': 123}, {'col1': 999}, {'col2': 2222}, {'col3': 100, 'name': 'Jack'}, {'col3': 200, 'name': 'Jill'}]
     assert compare_recordsets(A_nodes, expected)
 
     # Change the column names during import
     df = pd.DataFrame({"alternate_name": [1000]})
-    db.load_df(df, labels="B", rename={"alternate_name": "col3"})     # Map "alternate_name" into "col3"
+    db.load_pandas(df, labels="B", rename={"alternate_name": "col3"})     # Map "alternate_name" into "col3"
     B_nodes = db.get_nodes(match_B)
     expected_B = [{'col3': 3333}, {'col3': 3333}, {'col3': 1000}]
     assert compare_recordsets(B_nodes, expected_B)
 
     # Add 2 more records, with double labels
     df = pd.DataFrame({"patient_id": [100, 200], "name": ["Jack", "Jill"]})
-    db.load_df(df, labels=["X", "Y"])
+    db.load_pandas(df, labels=["X", "Y"])
     match_X_Y = db.match(labels=["X", "Y"])
     X_Y_nodes = db.get_nodes(match_X_Y)
     expected_X_Y = [{'patient_id': 100, 'name': 'Jack'}, {'patient_id': 200, 'name': 'Jill'}]
     assert compare_recordsets(X_Y_nodes, expected_X_Y)
 
 
-def test_load_df_2(db):
+def test_load_pandas_2(db):
     db.empty_dbase(drop_indexes=True, drop_constraints=True)
 
     # Add 3 records
     df = pd.DataFrame({"scientist_id": [10, 20, 30], "name": ["Julian", "Jack", "Jill"], "location": ["CA", "NY", "DC"]})
-    id_list = db.load_df(df, labels="scientist", merge_primary_key=None)
+    id_list = db.load_pandas(df, labels="scientist", merge_primary_key=None)
 
     q = f'''
         MATCH (n :scientist) 
@@ -2123,7 +2123,7 @@ def test_load_df_2(db):
     # Update the "Julian" node, indexed by scientist_id (we'll modify the "name" of that node, and add a "specialty" field;
     # notice that the "location" field doesn't get altered)
     df = pd.DataFrame({"scientist_id": [10], "name": ["Julian W"], "specialty": ["Systems Biology"]})
-    db.load_df(df, labels="scientist", merge_primary_key="scientist_id", merge_overwrite=False)
+    db.load_pandas(df, labels="scientist", merge_primary_key="scientist_id", merge_overwrite=False)
     q = "MATCH (n :scientist) RETURN n"
     res = db.query(q, single_column="n")
     expected = [{'specialty': 'Systems Biology', 'name': 'Julian W', 'location': 'CA', 'scientist_id': 10},
@@ -2134,7 +2134,7 @@ def test_load_df_2(db):
     # This time, completely replace the "Julian" node, indexed by scientist_id.
     # Notice how all the previous fields that aren't being set now, are gone ("specialty" and "location")
     df = pd.DataFrame({"scientist_id": [10], "name": ["Jules"]})
-    db.load_df(df, labels="scientist", merge_primary_key="scientist_id", merge_overwrite=True)
+    db.load_pandas(df, labels="scientist", merge_primary_key="scientist_id", merge_overwrite=True)
     q = "MATCH (n :scientist) RETURN n"
     res = db.query(q, single_column="n")
     expected = [{'name': 'Jules', 'scientist_id': 10},
@@ -2152,14 +2152,14 @@ def test_load_df_2(db):
 
     # More tests of merge with primary_key
     df = pd.DataFrame({"patient_id": [100, 200], "name": ["Adam", "Eve"], "age": [21, 19]})
-    db.load_df(df, labels="X")
+    db.load_pandas(df, labels="X")
     match_X = db.match(labels=["X"])
     X_nodes = db.get_nodes(match_X)
     expected = [{'patient_id': 100, 'name': 'Adam', 'age': 21}, {'patient_id': 200, 'name': 'Eve', 'age': 19}]
     assert compare_recordsets(X_nodes, expected)
 
     df = pd.DataFrame({"patient_id": [300, 200], "name": ["Remy", "Eve again"]})
-    db.load_df(df, labels="X", merge_primary_key="patient_id", merge_overwrite=False)
+    db.load_pandas(df, labels="X", merge_primary_key="patient_id", merge_overwrite=False)
     X_nodes = db.get_nodes(match_X)
     expected = [{'patient_id': 100, 'name': 'Adam', 'age': 21},
                 {'patient_id': 300, 'name': 'Remy'},
@@ -2168,7 +2168,7 @@ def test_load_df_2(db):
     assert compare_recordsets(X_nodes, expected)
 
     df = pd.DataFrame({"patient_id": [300, 200], "name": ["Remy", "Eve YET again"]})
-    db.load_df(df, labels="X", merge_primary_key="patient_id", merge_overwrite=True)
+    db.load_pandas(df, labels="X", merge_primary_key="patient_id", merge_overwrite=True)
     X_nodes = db.get_nodes(match_X)
     expected = [{'patient_id': 100, 'name': 'Adam', 'age': 21},
                 {'patient_id': 300, 'name': 'Remy'},
@@ -2192,13 +2192,13 @@ def test_load_df_2(db):
         assert index_1 == expected_A
 
 
-def test_load_df_3(db):
+def test_load_pandas_3(db):
     db.empty_dbase(drop_indexes=True, drop_constraints=True)
 
     # First group on nodes to import
     ages = np.array([13, 25, 19, 99])
     series_1 = pd.Series(ages)    # A series with no name; during the import, "value" will be used
-    id_list = db.load_df(series_1, labels="age")
+    id_list = db.load_pandas(series_1, labels="age")
 
     q = f'''
         MATCH (n :age) 
@@ -2213,7 +2213,7 @@ def test_load_df_3(db):
     # More nodes to import
     prices = np.array([145, 512, 811])
     series_2 = pd.Series(prices, name="Discounted Price")   # This series has a bane
-    id_list_2 = db.load_df(series_2, labels="store prices")
+    id_list_2 = db.load_pandas(series_2, labels="store prices")
 
     # First, check that the old nodes are still there
     res = db.query(q, single_column="n")
@@ -2230,13 +2230,13 @@ def test_load_df_3(db):
     assert compare_recordsets(res, expected)
 
 
-def test_load_df_4(db):
+def test_load_pandas_4(db):
     # Test numeric columns
     db.empty_dbase(drop_indexes=True, drop_constraints=True)
 
     # First group on nodes to import, with option to ignore NaN's
     df = pd.DataFrame({"name": ["pot", "pan", "microwave"], "price": [12, np.nan, 55]})
-    db.load_df(df, labels="inventory", ignore_nan=True)
+    db.load_pandas(df, labels="inventory", ignore_nan=True)
 
     imported_records = db.get_nodes(db.match(labels="inventory"))
     expected = [{'price': 12.0, 'name': 'pot'}, {'name': 'pan'}, {'price': 55.0, 'name': 'microwave'}]
@@ -2244,7 +2244,7 @@ def test_load_df_4(db):
 
 
     # Re-import the same dataframe (with a different label), but this time not ignoring NaN's
-    db.load_df(df, labels="test", ignore_nan=False)
+    db.load_pandas(df, labels="test", ignore_nan=False)
 
     imported_records = db.get_nodes(db.match(labels="test"), order_by="name")
     expected = [{'price': 55.0, 'name': 'microwave'}, {'price': np.nan, 'name': 'pan'}, {'price': 12.0, 'name': 'pot'}]
@@ -2256,13 +2256,13 @@ def test_load_df_4(db):
     assert np.isnan(imported_records[1]["price"])
 
 
-def test_load_df_4b(db):
+def test_load_pandas_4b(db):
     # More tests of numeric columns
     db.empty_dbase(drop_indexes=True, drop_constraints=True)
 
     # Test with nans and ignore_nan = True
     df = pd.DataFrame({"name": ["Bob", "Tom"], "col1": [26, None], "col2": [1.1, None]})
-    db.load_df(df, labels="X")
+    db.load_pandas(df, labels="X")
     X_label_match = db.match(labels="X")
     X_nodes = db.get_nodes(X_label_match)
     expected = [{'name': 'Bob', 'col1': 26, 'col2': 1.1},
@@ -2272,7 +2272,7 @@ def test_load_df_4b(db):
 
     # Test of record merge with nans and ignore_nan = False
     df = pd.DataFrame({"name": ["Bob", "Tom"], "col1": [26, None], "col2": [1.1, None]})
-    db.load_df(df, labels="X", merge_primary_key='name', merge_overwrite=False, ignore_nan=False)
+    db.load_pandas(df, labels="X", merge_primary_key='name', merge_overwrite=False, ignore_nan=False)
     X_nodes = db.get_nodes(X_label_match, order_by="name")
     expected = [{'name': 'Bob', 'col1': 26, 'col2': 1.1},
                 {'name': 'Tom', 'col1': np.nan, 'col2': np.nan}]
@@ -2280,7 +2280,7 @@ def test_load_df_4b(db):
     np.testing.assert_equal(X_nodes, expected)  # Two NaN's are treated as "equal" by this function
 
 
-def test_load_df_4c(db):
+def test_load_pandas_4c(db):
     # Attempt to merge using columns with NULL values
     db.empty_dbase(drop_indexes=True, drop_constraints=True)
 
@@ -2288,19 +2288,19 @@ def test_load_df_4c(db):
     df = pd.DataFrame({"name": ["Bob", "Tom"], "col1": [26, None], "col2": [1.1, None]})
     with pytest.raises(Exception):
         # Cannot merge node on NULL value in column `col1`
-        db.load_df(df, labels="X", merge_primary_key='col1', merge_overwrite=False)
+        db.load_pandas(df, labels="X", merge_primary_key='col1', merge_overwrite=False)
 
     with pytest.raises(Exception):
         # Cannot merge node on NULL value in column `col1`
-        db.load_df(df, labels="X", merge_primary_key='col1', merge_overwrite=True)
+        db.load_pandas(df, labels="X", merge_primary_key='col1', merge_overwrite=True)
 
 
-def test_load_df_5(db):
+def test_load_pandas_5(db):
     db.empty_dbase(drop_indexes=True, drop_constraints=True)
 
     # First group on 5 nodes to import
     df = pd.DataFrame({"name": ["A", "B", "C", "D", "E"], "price": [1, 2, 3, 4, 5]})
-    db.load_df(df, labels="inventory")
+    db.load_pandas(df, labels="inventory")
 
     imported_records = db.get_nodes(db.match(labels="inventory"))
     expected = [{'price': 1, 'name': 'A'}, {'price': 2, 'name': 'B'}, {'price': 3, 'name': 'C'}, {'price': 4, 'name': 'D'}, {'price': 5, 'name': 'E'}]
@@ -2308,7 +2308,7 @@ def test_load_df_5(db):
 
 
     # Re-import them (with a different label) in tiny "import chunks" of size 2
-    db.load_df(df, labels="test", max_chunk_size=2)
+    db.load_pandas(df, labels="test", max_chunk_size=2)
 
     imported_records = db.get_nodes(db.match(labels="test"))
     expected = [{'price': 1, 'name': 'A'}, {'price': 2, 'name': 'B'}, {'price': 3, 'name': 'C'}, {'price': 4, 'name': 'D'}, {'price': 5, 'name': 'E'}]
@@ -2323,14 +2323,14 @@ def test_load_df_5(db):
     assert res == 10
 
 
-def test_load_df_6(db):
+def test_load_pandas_6(db):
     # Test times/dates
     db.empty_dbase(drop_indexes=True, drop_constraints=True)
 
     # Dataframe with group of dates, turned into a datetime column
     df = pd.DataFrame({"name": ["A", "B", "C"], "arrival date": ["2020-01-01", "2020-01-11", "2020-01-21"]})
     df['arrival date'] = pd.to_datetime(df['arrival date'])
-    id_list = db.load_df(df, labels="events")
+    id_list = db.load_pandas(df, labels="events")
 
     for node_id in id_list:
         q = f'''MATCH (n :events) WHERE id(n) = {node_id} RETURN apoc.meta.type(n.`arrival date`) AS dtype'''
@@ -2338,18 +2338,18 @@ def test_load_df_6(db):
         assert res == "LocalDateTime"
 
 
-def test_load_df_7(db):
+def test_load_pandas_7(db):
     # More tests of times/dates
     db.empty_dbase(drop_indexes=True, drop_constraints=True)
 
     df = pd.DataFrame([[datetime(2019, 6, 1, 18, 40, 32, 0), date(2019, 6, 1)]], columns=["dtm", "dt"])
-    db.load_df(df, labels="MYTEST")
+    db.load_pandas(df, labels="MYTEST")
     result = db.query("MATCH (x:MYTEST) return x.dtm as dtm, x.dt as dt", single_row=True)
     print(result)
     assert result == {'dtm': neo4j.time.DateTime(2019, 6, 1, 18, 40, 32, 0), 'dt': neo4j.time.Date(2019, 6, 1)}
 
 
-def test_load_df_8(db):
+def test_load_pandas_8(db):
     # More tests of times/dates
     db.empty_dbase(drop_indexes=True, drop_constraints=True)
 
@@ -2362,7 +2362,7 @@ def test_load_df_8(db):
                   None]
     })  # Note: for Pandas' datetime64[ns] types, NaT represents missing values
 
-    db.load_df(input_df, "MYTEST")
+    db.load_pandas(input_df, "MYTEST")
     res = db.query("MATCH (x:MYTEST) RETURN x.start as start ORDER BY start")
 
     assert res == [{'start': neo4j.time.DateTime(2010, 1, 1, 0, 1, 2, 123000)},

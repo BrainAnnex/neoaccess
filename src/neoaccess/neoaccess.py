@@ -696,6 +696,18 @@ class NeoAccess(NeoAccessCore):
 
 
 
+    def count_nodes(self) -> int:   # TODO: test
+        """
+        Compute and return the total number of nodes in the database
+
+        :return:    The total number of nodes in the database
+        """
+        q = "MATCH (n) RETURN COUNT(n) AS number_nodes"
+
+        return self.query(q, single_cell="number_nodes")
+
+
+
     def get_single_field(self, match: Union[int, NodeSpecs], field_name: str, order_by=None, limit=None) -> list:
         """
         For situations where one is fetching just 1 field,
@@ -814,23 +826,12 @@ class NeoAccess(NeoAccessCore):
 
 
 
-    def count_nodes(self) -> int:   # TODO: test
-        """
-        Compute and return the total number of nodes in the database
-
-        :return:    The total number of nodes in the database
-        """
-        q = "MATCH (n) RETURN COUNT(n) AS number_nodes"
-
-        return self.query(q, single_cell="number_nodes")
-
-
-
     def get_df(self, match: Union[int, NodeSpecs], order_by=None, limit=None) -> pd.DataFrame:
         """
         Similar to get_nodes(), but with fewer arguments - and the result is returned as a Pandas dataframe
 
         [See get_nodes() for more information about the arguments]
+
         :param match:       EITHER an integer with an internal database node id,
                                 OR a "NodeSpecs" object, as returned by match(), with data to identify a node or set of nodes
         :param order_by:    Optional string with the key (field) name to order by, in ascending order
@@ -839,7 +840,6 @@ class NeoAccess(NeoAccessCore):
 
         :return:            A Pandas dataframe
         """
-
         result_list = self.get_nodes(match=match, order_by=order_by, limit=limit)
         return pd.DataFrame(result_list)
 
@@ -2540,53 +2540,7 @@ class NeoAccess(NeoAccessCore):
         pass        # Used to get a better structure view in IDEs
     #####################################################################################################
 
-    # TODO: OBSOLETE
-    def load_pandas(self, df:Union[pd.DataFrame, pd.Series],
-                    labels:str, rename=None, max_chunk_size = 10000) -> [int]:
-        """
-        Load a Pandas Data Frame (or Series) into Neo4j.
-        Each row is loaded as a separate node.
-        NOTE: no attempt is made to check if an identical (or at least matching in some primary key) node
-              already exists.  The function load_df() may be used for that
-
-        TODO: maybe save the Panda data frame's row number as an attribute of the Neo4j nodes,
-              to ALWAYS have a primary key
-
-        :param df:              A Pandas Data Frame (or Series) to import into Neo4j
-        :param labels:           String with a Neo4j label to use on the newly-created nodes
-                                    TODO: allow multiple labels
-        :param rename:          Optional dictionary to rename the Pandas dataframe's columns
-                                    EXAMPLE {"current_name": "name_we_want"}
-        :param max_chunk_size:  To limit the number of rows loaded at one time
-        :return:                A (possibly-empty) list of the internal database ID's of the created nodes
-        """
-        if isinstance(df, pd.Series):
-            df = pd.DataFrame(df)           # Convert a Pandas Series into a Data Frame
-
-        if rename is not None:
-            df = df.rename(rename, axis=1)  # Rename the columns in the Pandas data frame
-
-        result = []    # List of internal database ID's of the created nodes
-        batch_size = int(len(df.index)/max_chunk_size) + 1
-        for df_chunk in np.array_split(df, batch_size):    # Split the operation into batches
-            q = f'''
-                WITH $data AS data 
-                UNWIND data AS record 
-                CREATE (n:`{labels}`) 
-                SET n=record
-                RETURN id(n) as node_id 
-            '''
-            data_binding = {'data': df_chunk.to_dict(orient = 'records')}
-            result_chunk = self.query(q, data_binding)
-            if result_chunk:
-                result += [r['node_id'] for r in result_chunk]
-
-        return result
-
-
-
-
-    def load_df(
+    def load_pandas(
             self,
             df :Union[pd.DataFrame, pd.Series], labels :Union[str, List[str], Tuple[str]],
             merge_primary_key=None, merge_overwrite=False,
@@ -2689,7 +2643,6 @@ class NeoAccess(NeoAccessCore):
 
 
         res = []                                                # Running list of the internal database ID's of the created nodes
-
 
         # Determine the number of needed batches (always at least 1)
         number_batches = math.ceil(len(df) / max_chunk_size)    # Note that if the max_chunk_size equals the size of the df
