@@ -243,7 +243,7 @@ class NeoAccessCore:
                                 EXAMPLE, assuming that the cypher string contains the substrings "$node_id":
                                         {'node_id': 20}
 
-        :param single_row:      Return a dictionary containing just the first (0-th) result row, if present,
+        :param single_row:      (OPTIONAL) Return a dictionary containing just the first (0-th) result row, if present,
                                     or None in case of no results.
                                     Note that if the query returns multiple records, the picked one
                                     will be arbitrary, unless an ORDER BY is included in the query
@@ -251,14 +251,17 @@ class NeoAccessCore:
                                         {"brand": "Toyota", "color": "White"}
                                         {'n': {}}
 
-        :param single_cell:     (OPTIONAL) Meant in situations where only 1 node (record) is expected,
-                                and one wants only 1 specific field of that record.
-                                If provided, return the value of the field by that name in the first returned record
-                                Note: this will be None if there are no results, or if the first (0-th) result row lacks a key with this name
-                                TODO: test and give examples.  single_cell="name" will return result[0].get("name")
+        :param single_cell:     (OPTIONAL) Meant for situations where only 1 node (record) is expected,
+                                    and one wants only 1 specific field of that record.
+                                    If a string is provided, return the value of the field by that name
+                                    in the first (0-th) retrieved record.
+                                    In case of no nodes found, or a node that lacks a key with this name, None will be returned.
+                                    Note that if the query returns multiple records, the picked one
+                                    will be arbitrary, unless an ORDER BY is included in the query
 
         :param single_column:   (OPTIONAL) Name of the column of interest.
-                                If provided, assemble a list (possibly empty) from all the values of that particular column all records.
+                                If a string is provided, assemble a list (possibly empty)
+                                from all the values of that particular column all records.
                                 Note: can also be used to extract data from a particular node, for queries that return whole nodes
 
         :return:        If any of single_row, single_cell or single_column are True, see info under their entries.

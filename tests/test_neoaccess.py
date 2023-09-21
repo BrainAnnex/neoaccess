@@ -137,7 +137,7 @@ def test_query(db):
 
 
 def test_query_2(db):
-    # Explore the "single_row" flag for query()
+    # Explore the "single_row" and "single_cell" arguments of query()
 
     db.empty_dbase(drop_indexes=True, drop_constraints=True)
 
@@ -146,26 +146,45 @@ def test_query_2(db):
     result = db.query(q, single_row=True)
     assert result is None       # No records returned
 
+    result = db.query(q, single_cell="some_name")
+    assert result is None       # No records returned
+
+
     db.create_node(labels="car", properties={})     # A record with no properties
 
     result = db.query(q, single_row=True)
-    assert result == {'n': {}}      # Note how this differs from the previous case of no records found
+    assert result == {'n': {}}      # Note how this differs from the case of no records found
+
+    result = db.query(q, single_cell="some_name")
+    assert result is None           # A record was found, but lacks a field called "some_name"
+
 
     q = "MATCH (n) RETURN n.color AS color"
     result = db.query(q, single_row=True)
     assert result == {"color": None}
+    result = db.query(q, single_cell="color")
+    assert result is None
+
 
     # Add a 1st boat
     db.create_node(labels="boat", properties={"type": "sloop"})
     q = "MATCH (n :boat) RETURN n.type AS boat_type"
     result = db.query(q, single_row=True)
     assert result == {"boat_type": "sloop"}
+    result = db.query(q, single_cell="boat_type")
+    assert result == "sloop"
+    result = db.query(q, single_cell="brand")
+    assert result is None   # No "brand" field in the result
 
     # Add a 2nd boat
     db.create_node(labels="boat", properties={"type": "ketch"})
     q = "MATCH (n :boat) RETURN n.type AS boat_type ORDER BY n.type"
     result = db.query(q, single_row=True)
     assert result == {"boat_type": "ketch"}
+    result = db.query(q, single_cell="boat_type")
+    assert result == "ketch"
+    result = db.query(q, single_cell="brand")
+    assert result is None   # Still no "brand" field in the result
 
 
 
