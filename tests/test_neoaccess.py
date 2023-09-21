@@ -14,6 +14,7 @@ IMPORTANT - to run the pytests in this file, the following ENVIRONMENT VARIABLES
 import pytest
 from src.neoaccess import neoaccess as neo_access
 from utilities.comparisons import compare_unordered_lists, compare_recordsets
+from datetime import datetime, date
 import os
 import pandas as pd
 import numpy as np
@@ -2097,7 +2098,7 @@ def test_load_df_1(db):
     db.load_df(df, labels=["X", "Y"])
     match_X_Y = db.match(labels=["X", "Y"])
     X_Y_nodes = db.get_nodes(match_X_Y)
-    expected_X_Y = [{'patient_id': 100, 'name': 'Jack', }, {'patient_id': 200, 'name': 'Jill'}]
+    expected_X_Y = [{'patient_id': 100, 'name': 'Jack'}, {'patient_id': 200, 'name': 'Jill'}]
     assert compare_recordsets(X_Y_nodes, expected_X_Y)
 
 
@@ -2149,6 +2150,47 @@ def test_load_df_2(db):
     assert index_as_list == [['scientist'], 'scientist.scientist_id', ['scientist_id'], 'BTREE', 'NONUNIQUE']
 
 
+    # More tests of merge with primary_key
+    df = pd.DataFrame({"patient_id": [100, 200], "name": ["Adam", "Eve"], "age": [21, 19]})
+    db.load_df(df, labels="X")
+    match_X = db.match(labels=["X"])
+    X_nodes = db.get_nodes(match_X)
+    expected = [{'patient_id': 100, 'name': 'Adam', 'age': 21}, {'patient_id': 200, 'name': 'Eve', 'age': 19}]
+    assert compare_recordsets(X_nodes, expected)
+
+    df = pd.DataFrame({"patient_id": [300, 200], "name": ["Remy", "Eve again"]})
+    db.load_df(df, labels="X", merge_primary_key="patient_id", merge_overwrite=False)
+    X_nodes = db.get_nodes(match_X)
+    expected = [{'patient_id': 100, 'name': 'Adam', 'age': 21},
+                {'patient_id': 300, 'name': 'Remy'},
+                {'patient_id': 200, 'name': 'Eve again', 'age': 19}]    # Notice that Eve's name got changed, but her age
+                                                                        #       was undisturbed b/c of merge_overwrite=False
+    assert compare_recordsets(X_nodes, expected)
+
+    df = pd.DataFrame({"patient_id": [300, 200], "name": ["Remy", "Eve YET again"]})
+    db.load_df(df, labels="X", merge_primary_key="patient_id", merge_overwrite=True)
+    X_nodes = db.get_nodes(match_X)
+    expected = [{'patient_id': 100, 'name': 'Adam', 'age': 21},
+                {'patient_id': 300, 'name': 'Remy'},
+                {'patient_id': 200, 'name': 'Eve YET again'}]    # Notice that Eve's name got changed, and her age got dropped
+    assert compare_recordsets(X_nodes, expected)
+
+    # Verify that another database Index got created as a result of again using merge_primary_key
+    all_indexes = db.get_indexes()
+    assert len(all_indexes) == 2
+
+    # There's no guarantee about the order of the Indices
+    index_0 = list(all_indexes.iloc[0])
+    index_1 = list(all_indexes.iloc[1])
+    expected_A = [['scientist'], 'scientist.scientist_id', ['scientist_id'], 'BTREE', 'NONUNIQUE']  # The old index
+    expected_B = [['X'], 'X.patient_id', ['patient_id'], 'BTREE', 'NONUNIQUE']                      # The newly-added index
+
+    assert (index_0 == expected_A) or (index_0 == expected_B)
+    if index_0 == expected_A:
+        assert index_1 == expected_B
+    else:
+        assert index_1 == expected_A
+
 
 def test_load_df_3(db):
     db.empty_dbase(drop_indexes=True, drop_constraints=True)
@@ -2189,6 +2231,7 @@ def test_load_df_3(db):
 
 
 def test_load_df_4(db):
+    # Test numeric columns
     db.empty_dbase(drop_indexes=True, drop_constraints=True)
 
     # First group on nodes to import, with option to ignore NaN's
@@ -2211,6 +2254,45 @@ def test_load_df_4(db):
     # Check the NaN record
     assert imported_records[1]["name"] == expected[1]["name"]
     assert np.isnan(imported_records[1]["price"])
+
+
+def test_load_df_4b(db):
+    # More tests of numeric columns
+    db.empty_dbase(drop_indexes=True, drop_constraints=True)
+
+    # Test with nans and ignore_nan = True
+    df = pd.DataFrame({"name": ["Bob", "Tom"], "col1": [26, None], "col2": [1.1, None]})
+    db.load_df(df, labels="X")
+    X_label_match = db.match(labels="X")
+    X_nodes = db.get_nodes(X_label_match)
+    expected = [{'name': 'Bob', 'col1': 26, 'col2': 1.1},
+                {'name': 'Tom'}]
+    assert compare_recordsets(X_nodes, expected)
+
+
+    # Test of record merge with nans and ignore_nan = False
+    df = pd.DataFrame({"name": ["Bob", "Tom"], "col1": [26, None], "col2": [1.1, None]})
+    db.load_df(df, labels="X", merge_primary_key='name', merge_overwrite=False, ignore_nan=False)
+    X_nodes = db.get_nodes(X_label_match, order_by="name")
+    expected = [{'name': 'Bob', 'col1': 26, 'col2': 1.1},
+                {'name': 'Tom', 'col1': np.nan, 'col2': np.nan}]
+
+    np.testing.assert_equal(X_nodes, expected)  # Two NaN's are treated as "equal" by this function
+
+
+def test_load_df_4c(db):
+    # Attempt to merge using columns with NULL values
+    db.empty_dbase(drop_indexes=True, drop_constraints=True)
+
+    # Attempt to merge using columns with NULL values
+    df = pd.DataFrame({"name": ["Bob", "Tom"], "col1": [26, None], "col2": [1.1, None]})
+    with pytest.raises(Exception):
+        # Cannot merge node on NULL value in column `col1`
+        db.load_df(df, labels="X", merge_primary_key='col1', merge_overwrite=False)
+
+    with pytest.raises(Exception):
+        # Cannot merge node on NULL value in column `col1`
+        db.load_df(df, labels="X", merge_primary_key='col1', merge_overwrite=True)
 
 
 def test_load_df_5(db):
@@ -2242,6 +2324,7 @@ def test_load_df_5(db):
 
 
 def test_load_df_6(db):
+    # Test times/dates
     db.empty_dbase(drop_indexes=True, drop_constraints=True)
 
     # Dataframe with group of dates, turned into a datetime column
@@ -2253,6 +2336,38 @@ def test_load_df_6(db):
         q = f'''MATCH (n :events) WHERE id(n) = {node_id} RETURN apoc.meta.type(n.`arrival date`) AS dtype'''
         res = db.query(q, single_cell="dtype")
         assert res == "LocalDateTime"
+
+
+def test_load_df_7(db):
+    # More tests of times/dates
+    db.empty_dbase(drop_indexes=True, drop_constraints=True)
+
+    df = pd.DataFrame([[datetime(2019, 6, 1, 18, 40, 32, 0), date(2019, 6, 1)]], columns=["dtm", "dt"])
+    db.load_df(df, labels="MYTEST")
+    result = db.query("MATCH (x:MYTEST) return x.dtm as dtm, x.dt as dt", single_row=True)
+    print(result)
+    assert result == {'dtm': neo4j.time.DateTime(2019, 6, 1, 18, 40, 32, 0), 'dt': neo4j.time.Date(2019, 6, 1)}
+
+
+def test_load_df_8(db):
+    # More tests of times/dates
+    db.empty_dbase(drop_indexes=True, drop_constraints=True)
+
+    input_df = pd.DataFrame({
+        'int_values': [2, 1, 3, 4],
+        'str_values': ['abc', 'def', 'ghi', 'zzz'],
+        'start': [datetime(year=2010, month=1, day=1, hour=0, minute=1, second=2, microsecond=123),
+                  datetime(year=2023, month=1, day=1),
+                  pd.NaT,
+                  None]
+    })  # Note: for Pandas' datetime64[ns] types, NaT represents missing values
+
+    db.load_df(input_df, "MYTEST")
+    res = db.query("MATCH (x:MYTEST) RETURN x.start as start ORDER BY start")
+
+    assert res == [{'start': neo4j.time.DateTime(2010, 1, 1, 0, 1, 2, 123000)},
+                   {'start': neo4j.time.DateTime(2023, 1, 1, 0, 0, 0, 0)},
+                   {'start': None}, {'start': None}]
 
 
 

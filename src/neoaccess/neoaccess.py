@@ -734,9 +734,9 @@ class NeoAccess(NeoAccessCore):
         :param return_labels:   Flag indicating whether to also include the Neo4j label names in the returned data
                                     (using "neo4j_labels" as its key in the returned dictionary)
 
-        :param order_by:        (Optional) String with the key (field) name to order by, in ascending order
+        :param order_by:        (OPTIONAL) String with the key (field) name to order by, in ascending order
                                     Caution: lower and uppercase names are treated differently in the sort order
-        :param limit:           (Optional) Integer to specify the maximum number of nodes returned
+        :param limit:           (OPTIONAL) Integer to specify the maximum number of nodes returned
 
         :param single_row:      Meant in situations where only 1 node (record) is expected, or perhaps one wants to sample the 1st one;
                                     if not found, None will be returned [to distinguish it from a found record with no fields!]
@@ -765,7 +765,7 @@ class NeoAccess(NeoAccessCore):
         # TODO: provide an option to specify the desired fields
 
         """
-        match_structure = CypherUtils.process_match_structure(match)
+        match_structure = CypherUtils.process_match_structure(match, caller_method="get_nodes")
 
         if self.debug:
             print("In get_nodes()")
@@ -908,7 +908,7 @@ class NeoAccess(NeoAccessCore):
         :return:        An integer with the internal database ID of the located node,
                         if exactly 1 node is found; otherwise, raise an Exception
         """
-        match_structure = CypherUtils.process_match_structure(match)
+        match_structure = CypherUtils.process_match_structure(match, caller_method="get_node_internal_id")
 
         if self.debug:
             print("In get_node_internal_id()")
@@ -1524,7 +1524,7 @@ class NeoAccess(NeoAccessCore):
         :return:        The number of nodes deleted (possibly zero)
         """
         # Create the "processed-match dictionaries"
-        match_structure = CypherUtils.process_match_structure(match)
+        match_structure = CypherUtils.process_match_structure(match, caller_method="delete_nodes")
 
         if self.debug:
             print("In delete_nodes()")
@@ -1665,7 +1665,7 @@ class NeoAccess(NeoAccessCore):
         if set_dict == {}:
             return 0             # There's nothing to do
 
-        match_structure = CypherUtils.process_match_structure(match)
+        match_structure = CypherUtils.process_match_structure(match, caller_method="set_fields")
 
         if self.debug:
             print("In set_fields()")
@@ -1754,8 +1754,8 @@ class NeoAccess(NeoAccessCore):
         :return:            The number of edges added.  If none got added, or in case of error, an Exception is raised
         """
         # Create the corresponding "CypherMatch" objects
-        cypher_match_from = CypherUtils.process_match_structure(match_from, dummy_node_name="from")
-        cypher_match_to   = CypherUtils.process_match_structure(match_to, dummy_node_name="to")
+        cypher_match_from = CypherUtils.process_match_structure(match_from, dummy_node_name="from", caller_method="add_links")
+        cypher_match_to   = CypherUtils.process_match_structure(match_to, dummy_node_name="to", caller_method="add_links")
 
         if self.debug:
             print("In add_links()")
@@ -1860,8 +1860,8 @@ class NeoAccess(NeoAccessCore):
         :return:            The number of edges removed.  If none got deleted, or in case of error, an Exception is raised
         """
         # Create the "processed match dictionaries"
-        match_from = CypherUtils.process_match_structure(match_from, dummy_node_name="from")
-        match_to   = CypherUtils.process_match_structure(match_to, dummy_node_name="to")
+        match_from = CypherUtils.process_match_structure(match_from, dummy_node_name="from", caller_method="remove_links")
+        match_to   = CypherUtils.process_match_structure(match_to, dummy_node_name="to", caller_method="remove_links")
 
         if self.debug:
             print("In remove_links()")
@@ -1948,8 +1948,8 @@ class NeoAccess(NeoAccessCore):
 
         :return:            The number of links (relationships) that were found
         """
-        match_from = CypherUtils.process_match_structure(match_from, dummy_node_name="from")
-        match_to   = CypherUtils.process_match_structure(match_to, dummy_node_name="to")
+        match_from = CypherUtils.process_match_structure(match_from, dummy_node_name="from", caller_method="number_of_links")
+        match_to   = CypherUtils.process_match_structure(match_to, dummy_node_name="to", caller_method="number_of_links")
 
         if self.debug:
             print("In number_of_links()")
@@ -2121,7 +2121,7 @@ class NeoAccess(NeoAccessCore):
         :return:                A list of dictionaries with all the properties of the neighbor nodes
                                 TODO: maybe add the option to just return a subset of fields
         """
-        match_structure = CypherUtils.process_match_structure(match)
+        match_structure = CypherUtils.process_match_structure(match, caller_method="follow_links")
 
         if self.debug:
             print("In follow_links()")
@@ -2161,7 +2161,7 @@ class NeoAccess(NeoAccessCore):
 
         :return:                The total number of inbound and/or outbound relationships to the given node(s)
         """
-        match_structure = CypherUtils.process_match_structure(match)
+        match_structure = CypherUtils.process_match_structure(match, caller_method="count_links")
 
         if self.debug:
             print("In count_links()")
@@ -2673,9 +2673,10 @@ class NeoAccess(NeoAccessCore):
                                                         # Note: a column with a NaN is automatically a float even if all values are int
                     numeric_columns.append(col)
 
-        if not merge_overwrite and merge_primary_key in numeric_columns:
-            assert not (df[merge_primary_key].isna().any()), f"Cannot merge node on NULL value in {merge_primary_key}. " \
-                                                       "Use merge_overwrite=True or eliminate missing values"
+        if merge_primary_key in numeric_columns:
+            assert not (df[merge_primary_key].isna().any()), \
+                    f"Cannot merge nodes on NULL values in column `{merge_primary_key}`. " \
+                    "Eliminate missing values"
 
 
         op = 'MERGE' if merge_primary_key else 'CREATE'   # A "MERGE" or "CREATE" operation, as needed

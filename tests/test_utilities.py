@@ -1,5 +1,6 @@
 from utilities.comparisons import *
 
+# TODO: look into the library "pytest-unordered" :  https://pypi.org/project/pytest-unordered/
 
 
 def test_compare_recordsets():

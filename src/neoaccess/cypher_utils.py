@@ -366,19 +366,30 @@ class CypherUtils:
     """
 
     @classmethod
-    def process_match_structure(cls, handle: Union[int, NodeSpecs], dummy_node_name="n") -> CypherMatch:
+    def process_match_structure(cls, handle: Union[int, NodeSpecs], dummy_node_name="n", caller_method=None) -> CypherMatch:
         """
         Accept either a valid internal database node ID, or a "NodeSpecs" object (a "raw match"),
         and turn it into a "CypherMatch" object (a "processed match")
 
-        :param handle:
-        :param dummy_node_name:
+        :param handle:          Either an integer with a valid internal database ID,
+                                    or an object of type NodeSpecs
+        :param dummy_node_name: A string that will be used inside a Cypher query, to refer to nodes
+        :param caller_method:   (OPTIONAL) String with name of caller method, only used for more clear error messages
+
         :return:                A "CypherMatch" object (a "processed match"), used to identify a node,
                                     or group of nodes
         """
         if cls.valid_internal_id(handle):    # If the argument "handle" is a valid internal database ID
             node_specs = NodeSpecs(internal_id=handle)
             return CypherMatch(node_specs, dummy_node_name_if_missing=dummy_node_name)
+
+        # Since the "handle" argument was NOT a valid internal database ID, it must be an object of type NodeSpecs
+        if type(handle) != NodeSpecs:
+            if caller_method is None:
+                caller_method = "process_match_structure"
+
+            raise Exception(f"{caller_method}(): the argument must be either an integer with a valid internal database ID, "
+                            f"or an object of type cypher_utils.NodeSpecs")
 
 
         return CypherMatch(handle, dummy_node_name_if_missing=dummy_node_name)
