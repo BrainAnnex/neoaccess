@@ -3,7 +3,7 @@
 #       - CypherMatch       To store Cypher fragments & data-binding dict, to identify one or more nodes (the "PROCESSED match structure")
 #       - CypherUtils       Static class to pre-process node specs, plus misc. Cypher-related utilities
 
-from typing import Union
+from typing import Union, List, Tuple
 
 
 
@@ -105,7 +105,7 @@ class NodeSpecs:
 
 
     def __str__(self):
-        return f"RAW match structure:\n" \
+        return f"RAW match structure (object of class NodeSpecs):\n" \
                 f"    internal_id: {self.internal_id}" \
                 f"    labels: {self.labels}" \
                 f"    key_name: {self.key_name}" \
@@ -125,8 +125,10 @@ class CypherMatch:
     Meant as a PRIVATE class for NeoAccess; not indicated for the end user.
     
     Objects of this class (sometimes referred to as a "PROCESSED match structures")
-    are used to facilitate for a user to specify a node in a wide variety of way - and
+    are used to facilitate a user to specify a node in a wide variety of ways - and
     save those specifications, in a "pre-digested" way, to use as needed in Cypher queries.
+
+    NO extra database operations are involved.
     
     They store the following 4 properties:
 
@@ -289,7 +291,7 @@ class CypherMatch:
 
 
     def __str__(self):
-        return f"CYPHER-PROCESSED match structure:\n" \
+        return f"CYPHER-PROCESSED match structure (object of class CypherMatch):\n" \
                f"    node: {self.node}" \
                f"    where: {self.where}" \
                f"    data_binding: {self.data_binding}" \
@@ -333,6 +335,12 @@ class CypherMatch:
 
 
 
+    def extract_where_clause(self) -> str:
+        # TODO: new method to test.  Cleanup the WHERE clause, and prefix the "WHERE" keyword as needed
+        return CypherUtils.prepare_where([self.where])
+
+
+
     def assert_valid_structure(self) -> None:
         """
         Verify that the object is a valid one (i.e., correctly initialized); if not, raise an Exception
@@ -358,19 +366,30 @@ class CypherUtils:
     """
 
     @classmethod
-    def process_match_structure(cls, handle: Union[int, NodeSpecs], dummy_node_name="n") -> CypherMatch:
+    def process_match_structure(cls, handle: Union[int, NodeSpecs], dummy_node_name="n", caller_method=None) -> CypherMatch:
         """
         Accept either a valid internal database node ID, or a "NodeSpecs" object (a "raw match"),
         and turn it into a "CypherMatch" object (a "processed match")
 
-        :param handle:
-        :param dummy_node_name:
+        :param handle:          Either an integer with a valid internal database ID,
+                                    or an object of type NodeSpecs
+        :param dummy_node_name: A string that will be used inside a Cypher query, to refer to nodes
+        :param caller_method:   (OPTIONAL) String with name of caller method, only used for more clear error messages
+
         :return:                A "CypherMatch" object (a "processed match"), used to identify a node,
                                     or group of nodes
         """
         if cls.valid_internal_id(handle):    # If the argument "handle" is a valid internal database ID
             node_specs = NodeSpecs(internal_id=handle)
             return CypherMatch(node_specs, dummy_node_name_if_missing=dummy_node_name)
+
+        # Since the "handle" argument was NOT a valid internal database ID, it must be an object of type NodeSpecs
+        if type(handle) != NodeSpecs:
+            if caller_method is None:
+                caller_method = "process_match_structure"
+
+            raise Exception(f"{caller_method}(): the argument must be either an integer with a valid internal database ID, "
+                            f"or an object of type cypher_utils.NodeSpecs")
 
 
         return CypherMatch(handle, dummy_node_name_if_missing=dummy_node_name)
@@ -400,6 +419,8 @@ class CypherUtils:
         """
         Given the two "CypherMatch" objects (i.e. PROCESSED match structures),
         return the combined version of all their WHERE statements.
+        Also prefix the WHERE keyword to the result (if appropriate);
+        if there are no clauses, an empty string is returned (without the WHERE keyword.)
         For details, see prepare_where()
 
         :param match1:  A CypherMatch" object to be used to identify a node, or group of nodes
@@ -457,7 +478,7 @@ class CypherUtils:
 
         # Note that 0 is a valid Neo4j ID (apparently inconsistently assigned, on occasion, by the database)
         assert internal_id >= 0, \
-            f"assert_valid_internal_id(): Neo4j internal ID's cannot be negative; the value passed was {internal_id}"
+            f"assert_valid_internal_id(): Neo4j internal IDs cannot be negative; the value passed was {internal_id}"
 
 
 
@@ -479,13 +500,13 @@ class CypherUtils:
 
 
     @classmethod
-    def prepare_labels(cls, labels) -> str:
+    def prepare_labels(cls, labels :Union[str, List[str], Tuple[str]]) -> str:
         """
-        Turn the given string, or list/tuple of strings - representing Neo4j labels - into a string
+        Turn the given string, or list/tuple of strings - representing one or more Neo4j labels - into a string
         suitable for inclusion in a Cypher query.
         Blanks ARE allowed in the names.
         EXAMPLES:
-            "" or None          give rise to    ""
+            "" or None          both give rise to    ""
             "client"            gives rise to   ":`client`"
             "my label"          gives rise to   ":`my label`"
             ["car", "vehicle"]  gives rise to   ":`car`:`vehicle`"
