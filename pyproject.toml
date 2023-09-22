@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "neoaccess"
-version = "4.3.1"
+version = "4.4.1"
 authors = [
   { name = "Julian West BrainAnnex.org" },
 ]
