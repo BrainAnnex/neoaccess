@@ -104,7 +104,12 @@ class NodeSpecs:
 
 
 
-    def __str__(self):
+    def __str__(self) -> str:
+        """
+        Return a description of this object
+
+        :return:
+        """
         return f"RAW match structure (object of class NodeSpecs):\n" \
                 f"    internal_id: {self.internal_id}" \
                 f"    labels: {self.labels}" \
@@ -290,7 +295,11 @@ class CypherMatch:
 
 
 
-    def __str__(self):
+    def __str__(self) -> str:
+        """
+        Return a description of this object
+        :return:
+        """
         return f"CYPHER-PROCESSED match structure (object of class CypherMatch):\n" \
                f"    node: {self.node}" \
                f"    where: {self.where}" \
@@ -336,7 +345,12 @@ class CypherMatch:
 
 
     def extract_where_clause(self) -> str:
-        # TODO: new method to test.  Cleanup the WHERE clause, and prefix the "WHERE" keyword as needed
+        """
+        Cleanup the WHERE clause, and prefix the "WHERE" keyword as needed
+
+        TODO: new method to test
+        :return:
+        """
         return CypherUtils.prepare_where([self.where])
 
 
@@ -370,6 +384,8 @@ class CypherUtils:
         """
         Accept either a valid internal database node ID, or a "NodeSpecs" object (a "raw match"),
         and turn it into a "CypherMatch" object (a "processed match")
+
+        Note: no database operation is performed
 
         :param handle:          Either an integer with a valid internal database ID,
                                     or an object of type NodeSpecs

@@ -108,7 +108,7 @@ class NeoAccessCore:
 
         self.block_query_execution = False  # If True, all the Cypher queries will get printed (just like done by debug),
                                             # but no database operations will actually be performed.
-                                            # Caution: most functions will fail validations on the results
+                                            # Caution: many functions will fail validations on the results
                                             #          of the query that wasn't executed.  This option should probably
                                             #          be combined with an Exception catch
 
@@ -173,9 +173,12 @@ class NeoAccessCore:
 
 
         if self.debug:
-            print(f"Connection to host '{self.host}' established.  *** IN DEBUG MODE : NO DATABASE OPERATIONS WILL BE PERFORMED ***")
+            print(f"Connection to host '{self.host}' established.  *** IN DEBUG MODE ***")
         else:
             print("Connection to Neo4j database established.")
+
+        if self.block_query_execution:
+            print(f"    *** In BLOCK QUERY EXECUTION mode : NO DATABASE OPERATIONS WILL BE PERFORMED ***")
 
 
 
@@ -213,6 +216,38 @@ class NeoAccessCore:
         if self.driver is not None:
             self.driver.close()
 
+
+
+    def block_query_execution(self) -> None:
+        """
+        To activate a special testing-only only.
+        All the Cypher queries will get printed (just like done in debug mode),
+        but no database operations will actually be performed.
+        Caution: many functions will fail validations on the results
+                 of the query that wasn't executed.  This option should probably
+                 be combined with an Exception catch
+
+        :return: None
+        """
+        print("    *** In BLOCK QUERY EXECUTION mode : NO DATABASE OPERATIONS WILL BE PERFORMED ***")
+        print("    To resume normal execution, invoke unblock_query_execution()")
+        print("    Caution: many functions will fail validations on the results of the query that wasn't executed\n.  "
+              "    This mode should probably be used in conjunction with Exception catching")
+        self.block_query_execution = True
+
+
+    def unblock_query_execution(self) -> None:
+        """
+        Terminate the special "BLOCK QUERY EXECUTION" test mode.  Cypher queries will be normally executed.
+        The state of the "debug" mode (only affecting extra diagnostic printing) won't be affected.
+
+        :return:    None
+        """
+        print("    *** block_query_execution MODE turned off.  Normal execution will resume ***")
+        self.block_query_execution = False
+
+        if self.debug:
+            print("    Continuing in debugging mode")
 
 
 
@@ -997,11 +1032,12 @@ class NeoAccess(NeoAccessCore):
 
 
 
-    def merge_node(self, labels, properties=None) -> dict:  # TODO: test
+    def merge_node(self, labels, properties=None) -> dict:
         """
         The node gets created only if no other node with same labels and properties exists.
 
         Create a new node with the given label(s) and with the attributes/values specified in the properties dictionary.
+        # TODO: test
 
         :param labels:      A string, or list/tuple of strings, specifying Neo4j labels (ok to have blank spaces)
         :param properties:  An optional (possibly empty or None) dictionary of properties
@@ -1586,7 +1622,7 @@ class NeoAccess(NeoAccessCore):
 
 
 
-    def bulk_delete_by_label(self, label: str):    # TODO: test.  CAUTION: only tested interactively
+    def bulk_delete_by_label(self, label: str):
         """
         IMPORTANT: APOC required (starting from v 4.4 of Neo4j, will be able to do this without APOC; TODO: not yet tested)
 
@@ -1599,6 +1635,7 @@ class NeoAccess(NeoAccessCore):
         See:  https://neo4j.com/developer/kb/large-delete-transaction-best-practices-in-neo4j/
 
         TODO: generalize to bulk-deletion not just by label
+        TODO: test.  CAUTION: only tested interactively
 
         :param label:   A string with the label of the nodes to delete (blank spaces in name are ok)
         :return:        A dict with the keys "batches" and "total"
@@ -2510,7 +2547,8 @@ class NeoAccess(NeoAccessCore):
 
     def drop_constraint(self, name: str) -> bool:
         """
-        Eliminate the constraint with the specified name.
+        Eliminate the constraint with the specified name
+
         :param name:    Name of the constraint to eliminate
         :return:        True if successful or False otherwise (for example, if the constraint doesn't exist)
         """
@@ -2526,6 +2564,7 @@ class NeoAccess(NeoAccessCore):
     def drop_all_constraints(self) -> None:
         """
         Eliminate all the constraints in the database
+
         :return:    None
         """
         constraints = self.get_constraints()
