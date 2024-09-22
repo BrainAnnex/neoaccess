@@ -507,6 +507,8 @@ class CypherUtils:
         :param internal_id: An alleged internal database ID
         :return:            True if internal_id is a valid internal database ID, or False otherwise
         """
+        # TODO: put the actual logic here, instead of in assert_valid_internal_id()
+        # TODO: provide a method by the same name in NeoCore
         try:
             cls.assert_valid_internal_id(internal_id)
             return True
@@ -519,7 +521,7 @@ class CypherUtils:
     def prepare_labels(cls, labels :Union[str, List[str], Tuple[str]]) -> str:
         """
         Turn the given string, or list/tuple of strings - representing one or more Neo4j labels - into a string
-        suitable for inclusion in a Cypher query.
+        suitable for inclusion into a Cypher query.
         Blanks ARE allowed in the names.
         EXAMPLES:
             "" or None          both give rise to    ""
