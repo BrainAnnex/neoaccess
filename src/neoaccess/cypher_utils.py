@@ -104,7 +104,12 @@ class NodeSpecs:
 
 
 
-    def __str__(self):
+    def __str__(self) -> str:
+        """
+        Return a description of this object
+
+        :return:
+        """
         return f"RAW match structure (object of class NodeSpecs):\n" \
                 f"    internal_id: {self.internal_id}" \
                 f"    labels: {self.labels}" \
@@ -191,11 +196,13 @@ class CypherMatch:
 
         """
         IMPORTANT:  By our convention -
-                if internal_id is provided, all other conditions are DISREGARDED;
-                if it's missing, an implicit AND operation applies to all the specified conditions
+                1) if internal_id is provided, all other conditions are DISREGARDED;
+                2) if it's missing, an implicit "AND" operation applies to all the specified conditions
+                
+                TODO: maybe ditch (1) and give an option to what boolean to use in (2)
         """
-        if node_specs.internal_id is not None:     # If an internal node ID is specified, it over-rides all the other conditions
-                                        # CAUTION: internal_id might be 0 ; that's a valid Neo4j node ID
+        if node_specs.internal_id is not None:  # If an internal node ID is specified, it over-rides all the other conditions
+                                                # CAUTION: internal_id might be 0 ; that's a valid Neo4j node ID
             cypher_match = f"({dummy_node_name})"
             cypher_where = f"id({dummy_node_name}) = {node_specs.internal_id}"
             self.node = cypher_match
@@ -290,7 +297,11 @@ class CypherMatch:
 
 
 
-    def __str__(self):
+    def __str__(self) -> str:
+        """
+        Return a description of this object
+        :return:
+        """
         return f"CYPHER-PROCESSED match structure (object of class CypherMatch):\n" \
                f"    node: {self.node}" \
                f"    where: {self.where}" \
@@ -336,7 +347,12 @@ class CypherMatch:
 
 
     def extract_where_clause(self) -> str:
-        # TODO: new method to test.  Cleanup the WHERE clause, and prefix the "WHERE" keyword as needed
+        """
+        Cleanup the WHERE clause, and prefix the "WHERE" keyword as needed
+
+        TODO: new method to test
+        :return:
+        """
         return CypherUtils.prepare_where([self.where])
 
 
@@ -370,6 +386,8 @@ class CypherUtils:
         """
         Accept either a valid internal database node ID, or a "NodeSpecs" object (a "raw match"),
         and turn it into a "CypherMatch" object (a "processed match")
+
+        Note: no database operation is performed
 
         :param handle:          Either an integer with a valid internal database ID,
                                     or an object of type NodeSpecs
@@ -491,6 +509,8 @@ class CypherUtils:
         :param internal_id: An alleged internal database ID
         :return:            True if internal_id is a valid internal database ID, or False otherwise
         """
+        # TODO: put the actual logic here, instead of in assert_valid_internal_id()
+        # TODO: provide a method by the same name in NeoCore
         try:
             cls.assert_valid_internal_id(internal_id)
             return True
@@ -503,7 +523,7 @@ class CypherUtils:
     def prepare_labels(cls, labels :Union[str, List[str], Tuple[str]]) -> str:
         """
         Turn the given string, or list/tuple of strings - representing one or more Neo4j labels - into a string
-        suitable for inclusion in a Cypher query.
+        suitable for inclusion into a Cypher query.
         Blanks ARE allowed in the names.
         EXAMPLES:
             "" or None          both give rise to    ""

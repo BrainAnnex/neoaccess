@@ -1065,6 +1065,14 @@ def test_create_node_with_links(db):
     assert lookup == [{"name": "Val", "city": "San Francisco"}]
 
 
+    db.create_node_with_links(labels="ADDRESS",
+                            properties={'state': 'CA', 'city': None},
+                            links=[])
+    match = db.match(labels = "ADDRESS", properties={"state": "CA"})
+    lookup = db.get_nodes(match)
+    assert lookup == [{"state": "CA"}]
+
+
 
 def test_assemble_query_for_linking(db):
     with pytest.raises(Exception):

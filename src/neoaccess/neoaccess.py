@@ -1,6 +1,6 @@
 from neo4j import GraphDatabase                         # The Neo4j python connectivity library "Neo4j Python Driver"
 from neo4j import __version__ as neo4j_driver_version   # The version of the Neo4j driver being used
-from neo4j.time import DateTime                         # to convert neo4j.time.DateTime's to python datetimes (and Dates)
+from neo4j.time import DateTime                         # To convert datetimes (and dates) between neo4j.time.DateTime and python
 import neo4j.graph                                      # To check returned data types
 from .cypher_utils import CypherUtils, NodeSpecs        # Helper classes for NeoAccess
 import math
@@ -36,7 +36,7 @@ from typing import Union, List, Tuple
     ----------------------------------------------------------------------------------
 	MIT License
 
-        Copyright (c) 2021-2023 Julian A. West
+        Copyright (c) 2021-2025 Julian A. West
 
         This file is part of the "Brain Annex" project (https://BrainAnnex.org),
         though it's released independently.
@@ -108,7 +108,7 @@ class NeoAccessCore:
 
         self.block_query_execution = False  # If True, all the Cypher queries will get printed (just like done by debug),
                                             # but no database operations will actually be performed.
-                                            # Caution: most functions will fail validations on the results
+                                            # Caution: many functions will fail validations on the results
                                             #          of the query that wasn't executed.  This option should probably
                                             #          be combined with an Exception catch
 
@@ -120,6 +120,13 @@ class NeoAccessCore:
 
         self.driver = None
 
+        assert host, "Cannot instantiate the NeoAccess object with an undefined argument`host`; " \
+                     "unable to obtain a default value from getenv('NEO4J_HOST') . You need to pass a value, " \
+                     "or to set that environment variable"
+
+        assert credentials, "Cannot instantiate the NeoAccess object with an undefined argument `credentials`; " \
+        "unable to obtain a default value from getenv('NEO4J_USER') and getenv('NEO4J_PASSWORD') . You need to pass a value, " \
+                            "or to set those environment variables"
 
         assert ("bolt" in host) or ("neo4j" in host), \
                         "`host` argument must start with `bolt` or `neo4j`"
@@ -162,6 +169,7 @@ class NeoAccessCore:
         # If we get thus far, the connection to the host was successfully established,
         # BUT this doesn't prove that we can actually connect to the database;
         # for example, with bad credentials, the connection to the host can still be established
+        # TODO: specifically also look the Exception ServiceUnavailable
         try:
             self.test_dbase_connection()
         except Exception as ex:
@@ -173,9 +181,12 @@ class NeoAccessCore:
 
 
         if self.debug:
-            print(f"Connection to host '{self.host}' established.  *** IN DEBUG MODE : NO DATABASE OPERATIONS WILL BE PERFORMED ***")
+            print(f"Connection to host '{self.host}' established.  *** IN DEBUG MODE ***")
         else:
             print("Connection to Neo4j database established.")
+
+        if self.block_query_execution:
+            print(f"    *** In BLOCK QUERY EXECUTION mode : NO DATABASE OPERATIONS WILL BE PERFORMED ***")
 
 
 
@@ -215,6 +226,42 @@ class NeoAccessCore:
 
 
 
+    def block_query_execution(self) -> None:
+        """
+        Activate a special testing-only only modality.
+        All the Cypher queries will get printed (just like done in debug mode),
+        but no database operations will actually be performed.
+        This modality will remain in effect until a call is made to unblock_query_execution()
+
+        Caution: many functions will fail validations on the results
+                 of the query that wasn't executed.  This modality should probably
+                 be combined with an Exception catch
+
+        :return: None
+        """
+        print("    *** In BLOCK QUERY EXECUTION mode : NO DATABASE OPERATIONS WILL BE PERFORMED ***")
+        print("    To resume normal execution, invoke unblock_query_execution()")
+        print("    Caution: many functions will fail validations on the results of the query that wasn't executed\n.  "
+              "    This mode should probably be used in conjunction with Exception catching")
+        self.block_query_execution = True
+
+
+    def unblock_query_execution(self) -> None:
+        """
+        Terminate the special "BLOCK QUERY EXECUTION" test mode, entered by a call to block_query_execution().
+        From now on, Cypher queries will be normally executed.
+        The state of the "debug" mode (only affecting extra diagnostic printing) won't be affected.
+
+        :return:    None
+        """
+        print("    *** block_query_execution MODE turned off.  Normal execution will resume ***")
+        self.block_query_execution = False
+
+        if self.debug:
+            print("    Continuing in debugging mode")
+
+
+
 
 
     #####################################################################################################
@@ -247,11 +294,11 @@ class NeoAccessCore:
                                 EXAMPLE, assuming that the cypher string contains the substrings "$node_id":
                                         {'node_id': 20}
 
-        :param single_row:      (OPTIONAL) Return a dictionary containing just the first (0-th) result row, if present,
+        :param single_row:      (OPTIONAL) If True, return a dictionary containing just the first (0-th) result row, if present,
                                     or None in case of no results.
                                     Note that if the query returns multiple records, the picked one
                                     will be arbitrary, unless an ORDER BY is included in the query
-                                    EXAMPLES:
+                                    EXAMPLES of returned values:
                                         {"brand": "Toyota", "color": "White"}
                                         {'n': {}}
 
@@ -281,8 +328,8 @@ class NeoAccessCore:
                                     -> list items such as {'n.gender': 'M', 'n.pid': 123}
                             Cypher returns a single computed value
                                     -> a single list item such as {"count(n)": 100}
-                            Cypher returns a single relationship, with or without attributes: MERGE (c)-[r:PAID_BY]->(p)
-                                    -> a single list item such as [{ 'r': ({}, 'PAID_BY', {}) }]
+                            Cypher returns RELATIONSHIPS (LINKS), with or without properties: MERGE (c)-[r :PAID_BY]->(p)
+                                    -> a single list item such as [{ 'r': ({}, 'PAID_BY', {}) }]   NOTE: link properties are NOT returned
                             Cypher returns a path:   MATCH p= .......   RETURN p
                                     -> list item such as {'p': [ {'name': 'Eve'}, 'LOVES', {'name': 'Adam'} ] }
                             Cypher creates nodes (without returning them)
@@ -341,7 +388,7 @@ class NeoAccessCore:
                     "MATCH (n1)-[r]->(n2) RETURN r"
 
         For example, useful in scenarios where nodes were returned,
-        and their Neo4j internal IDs and/or labels are desired
+        and their internal database IDs and/or labels are desired
         (in addition to all the properties and their values)
 
         Unless the flatten flag is True, individual records are kept as separate lists.
@@ -353,28 +400,43 @@ class NeoAccessCore:
             if b1 == b2, would that still be [b1, c1, b1(b2), c2] or [b1, c1, c2] - i.e. would we remove the duplicates?
             Try running with flatten=True "MATCH (b:boat), (c:car) RETURN b, c" on data like "CREATE (b:boat), (c1:car1), (c2:car2)"
 
-        :param q:               A Cypher query
-        :param data_binding:    An optional Cypher dictionary
-                                EXAMPLE, assuming that the cypher string contains the substring "$age":
-                                        {'age': 20}
-        :param flatten:         Flag indicating whether the Graph Data Types need to remain clustered by record,
-                                    or all placed in a single flattened list
-        :param fields_to_exclude:   Optional list of strings with name of fields
-                                    (in the database or special ones added by this function)
-                                    that wishes to drop.  No harm in listing fields that aren't present
+        :param q:                   A Cypher query : typically, one returning nodes, relationships or paths
+        :param data_binding:        An optional Cypher dictionary
+                                    EXAMPLE, assuming that the cypher string contains the substring "$age":
+                                            {'age': 20}
+        :param flatten:             Flag indicating whether the Graph Data Types need to remain clustered by record,
+                                        or all placed in a single flattened list
+        :param fields_to_exclude:   [OPTIONAL] list of strings with name of fields
+                                        (in the database, or special keys added by this function)
+                                        that wishes to drop.  No harm in listing fields that aren't present.
+                                        For example, if the query returns relationships, there will be 3 keys
+                                        named 'neo4j_start_node', 'neo4j_end_node', 'neo4j_type' ('type' is the name of the relationship)
 
         :return:        A (possibly empty) list of dictionaries, if flatten is True,
                         or a list of list, if flatten is False.
                         Each item in the lists is a dictionary, with details that will depend on which Graph Data Types
                                 were returned in the Cypher query.
-                                EXAMPLE of *individual items* - for a returned NODE
-                                    {'gender': 'M', 'age': 20, 'internal_id': 123, 'neo4j_labels': ['patient']}
-                                EXAMPLE of *individual items* - for a returned RELATIONSHIP
-                                    {'price': 7500, 'internal_id': 2,
-                                     'neo4j_start_node': <Node id=11 labels=frozenset() properties={}>,
-                                     'neo4j_end_node': <Node id=14 labels=frozenset() properties={}>,
-                                     'neo4j_type': 'bought_by'}]
+
+                        EXAMPLE with flatten=True for a query returning nodes "MATCH n RETURN n":
+                                [   {'year': 2023, 'make': 'Ford', 'internal_id': 123, 'neo4j_labels': ['Motor Vehicle']},
+                                    {'year': 2013, 'make': 'Toyota', 'internal_id': 4, 'neo4j_labels': ['Motor Vehicle']}
+                                ]
+                        EXAMPLE with flatten=False for that same query returning nodes "MATCH n RETURN n":
+                                [   [{'year': 2023, 'make': 'Ford', 'internal_id': 123, 'neo4j_labels': ['Motor Vehicle']}],
+                                    [{'year': 2013, 'make': 'Toyota', 'internal_id': 4, 'neo4j_labels': ['Motor Vehicle']}]
+                                ]
+
+                        EXAMPLE of *individual items* - for a returned NODE
+                            {'gender': 'M', 'age': 20, 'internal_id': 123, 'neo4j_labels': ['patient']}
+
+                        EXAMPLE of *individual items* - for a returned RELATIONSHIP (note that 'neo4j_type' is the link name,
+                            and that any properties of the relationships, such as 'price', appear as key/values in the dict)
+                            {'price': 7500, 'internal_id': 2,
+                             'neo4j_start_node': <Node id=11 labels=frozenset() properties={}>,
+                             'neo4j_end_node': <Node id=14 labels=frozenset() properties={}>,
+                             'neo4j_type': 'bought_by'}]
         """
+        #TODO: rename neo4j_labels to node_labels; rename neo4j_start_node to start_node, etc
         if self.debug or self.block_query_execution:
             self.debug_query_print(q, data_binding, method="query_extended")
             print(f"    flatten: {flatten} , fields_to_exclude: {fields_to_exclude}")
@@ -456,16 +518,16 @@ class NeoAccessCore:
         """
         Run a Cypher query and return statistics about its actions (such number of nodes created, etc.)
         Typical use is for queries that update the database.
-        If the query returns any values, a list of them is also made available, as the value of the key 'returned_data'.
+        If the query returns any values, they are made available as  list, as the value of the key 'returned_data'.
 
-        Note: if the query creates nodes and one wishes to obtain their Neo4j internal ID's,
+        Note: if the query creates nodes and one wishes to obtain their internal database ID's,
               one can include Cypher code such as "RETURN id(n) AS internal_id" (where n is the dummy name of the newly-created node)
 
         EXAMPLE:  result = update_query("CREATE(n :CITY {name: 'San Francisco'}) RETURN id(n) AS internal_id")
 
                   result will be {'nodes_created': 1, 'properties_set': 1, 'labels_added': 1,
                                   'returned_data': [{'internal_id': 123}]
-                                 } , assuming 123 is the Neo4j internal ID of the newly-created node
+                                 } , assuming 123 is the internal database ID of the newly-created node
 
         :param q:           Any Cypher query, but typically one that doesn't return anything
         :param data_binding: Data-binding dictionary for the Cypher query
@@ -496,7 +558,7 @@ class NeoAccessCore:
             result = new_session.run(q, data_binding)
 
             # Note: result is a neo4j.Result iterable object
-            #       See https://neo4j.com/docs/api/python-driver/current/api.html#neo4j.Result
+            #       See https://neo4j.com/docs/api/python-driver/4.4/api.html#neo4j.Result
 
             data_as_list = result.data()    # Fetch any data returned by the query, as a (possibly-empty) list of dictionaries
 
@@ -541,7 +603,24 @@ class NeoAccessCore:
 
 
 
-    def debug_query_print(self, q: str, data_binding=None, method=None) -> None:
+    def debug_print_query(self, q :str, data_binding=None, method=None) -> None:
+        """
+        Synonym for debug_query_print()
+
+        Print out the given Cypher query
+        (and, optionally, its data binding and/or the name of the calling method)
+
+        :param q:               String with Cypher query
+        :param data_binding:    OPTIONAL dictionary
+        :param method:          OPTIONAL string with the name of the calling method
+                                    EXAMPLE:  "foo"
+        :return:                None
+        """
+        self.debug_query_print(q=q, data_binding=data_binding, method=method)
+
+
+
+    def debug_query_print(self, q :str, data_binding=None, method=None) -> None:
         """
         Print out the given Cypher query
         (and, optionally, its data binding and/or the name of the calling method)
@@ -626,6 +705,63 @@ class NeoAccess(NeoAccessCore):
     #####################################################################################################
 
 
+
+
+    def match(self, labels=None, internal_id=None,
+              key_name=None, key_value=None, properties=None, clause=None, dummy_node_name="n") -> NodeSpecs:
+        """
+        Return a "NodeSpecs" object storing all the passed specifications (the "RAW match structure"),
+        as expected as argument in various other functions in this library,
+        in order to identify a node or group of nodes.
+
+        IMPORTANT:  if internal_id is provided, all other conditions are DISREGARDED;
+                    otherwise, an implicit AND applies to all the specified conditions.
+
+        Note:   NO database operation is actually performed by this function.
+
+        [Other names explored: identify(), preserve(), define_match(), locate(), choose() or identify()]
+
+        ALL THE ARGUMENTS ARE OPTIONAL (no arguments at all means "match everything in the database")
+        :param labels:      A string (or list/tuple of strings) specifying one or more Neo4j labels.
+                                (Note: blank spaces ARE allowed in the strings)
+                                EXAMPLES:  "cars"
+                                            ("cars", "powered vehicles")
+                            Note that if multiple labels are given, then only nodes with ALL of them will be matched;
+                            at present, there's no way to request an "OR" operation
+
+        :param internal_id: An integer with the node's internal database ID.
+                                If specified, it OVER-RIDES all the remaining arguments [except for the labels (TODO: revisit this)]
+
+        :param key_name:    A string with the name of a node attribute; if provided, key_value must be present, too
+        :param key_value:   The required value for the above key; if provided, key_name must be present, too
+                                Note: no requirement for the key to be primary
+
+        :param properties:  A (possibly-empty) dictionary of property key/values pairs, indicating a condition to match.
+                                EXAMPLE: {"gender": "F", "age": 22}
+
+        :param clause:      Either None, OR a (possibly empty) string containing a Cypher subquery,
+                            OR a pair/list (string, dict) containing a Cypher subquery and the data-binding dictionary for it.
+                            The Cypher subquery should refer to the node using the assigned dummy_node_name (by default, "n")
+                                IMPORTANT:  in the dictionary, don't use keys of the form "n_par_i",
+                                            where n is the dummy node name and i is an integer,
+                                            or an Exception will be raised - those names are for internal use only
+                                EXAMPLES:   "n.age < 25 AND n.income > 100000"
+                                            ("n.weight < $max_weight", {"max_weight": 100})
+
+        :param dummy_node_name: A string with a name by which to refer to the node (by default, "n");
+                                only used if a `clause` argument is passed
+
+        :return:            A python data dictionary, to preserve together all the passed arguments
+        """
+        #TODO: limitations include inability to do partial, or case-insensitive, matches for key_value.
+        #      Maybe instead of specifying all arguments at once, it might be better to have individual methods
+        #      for a "Cypher query builder"?
+        return NodeSpecs(internal_id=internal_id,
+                         labels=labels, key_name=key_name, key_value=key_value,
+                         properties=properties, clause=clause, clause_dummy_name=dummy_node_name)
+
+
+
     def get_record_by_primary_key(self, labels: str, primary_key_name: str, primary_key_value,
                                   return_internal_id=False) -> Union[dict, None]:
         """
@@ -681,7 +817,7 @@ class NeoAccess(NeoAccessCore):
 
     def exists_by_internal_id(self, internal_id) -> bool:
         """
-        Return True if a node with the given internal Neo4j exists, or False otherwise
+        Return True if a node with the given internal database ID exists, or False otherwise
 
         :param internal_id: An integer with a node's internal database ID
         :return:            True if a node with the given internal Neo4j exists, or False otherwise
@@ -738,8 +874,9 @@ class NeoAccess(NeoAccessCore):
                   return_internal_id=False, return_labels=False, order_by=None, limit=None,
                   single_row=False, single_cell=""):
         """
-        RETURN a list of the records (as dictionaries of ALL the key/value node properties)
+        By default, it returns a list of the records (as dictionaries of ALL the key/value node properties)
         corresponding to all the Neo4j nodes specified by the given match data.
+        However, if the flags "single_row" or "single_cell" are set, simpler data structures are returned
 
         :param match:           EITHER an integer with an internal database node id,
                                     OR a "NodeSpecs" object, as returned by match(), with data to identify a node or set of nodes
@@ -751,10 +888,14 @@ class NeoAccess(NeoAccessCore):
 
         :param order_by:        (OPTIONAL) String with the key (field) name to order by, in ascending order
                                     Caution: lower and uppercase names are treated differently in the sort order
-        :param limit:           (OPTIONAL) Integer to specify the maximum number of nodes returned
+                                    TODO: standardize the case; provide support for DESC and for multiple fields
 
-        :param single_row:      Meant in situations where only 1 node (record) is expected, or perhaps one wants to sample the 1st one;
-                                    if not found, None will be returned [to distinguish it from a found record with no fields!]
+        :param limit:           (OPTIONAL) Integer to specify the maximum number of nodes returned
+                                    TODO: provide support for SKIP
+
+        :param single_row:      Meant in situations where only 1 node (record) is expected, or perhaps one wants to sample the 1st one.
+                                    If True and a record or records were found, a dict will be returned instead of a list (containing the 1st record);
+                                    if nothing was found, None will be returned [to distinguish it from a found record with no fields!]
 
         :param single_cell:     Meant in situations where only 1 node (record) is expected, and one wants only 1 specific field of that record.
                                 If single_cell is specified, return the value of the field by that name in the first node
@@ -786,7 +927,7 @@ class NeoAccess(NeoAccessCore):
             print("In get_nodes()")
             print("    match_structure:", match_structure)
 
-        # Unpack needed values from the match dictionary
+        # Unpack needed values from the match structure
         (node, where, data_binding, dummy_node_name) = match_structure.unpack_match()
 
         cypher = f"MATCH {node} {CypherUtils.prepare_where(where)} RETURN {dummy_node_name}"
@@ -845,58 +986,6 @@ class NeoAccess(NeoAccessCore):
         """
         result_list = self.get_nodes(match=match, order_by=order_by, limit=limit)
         return pd.DataFrame(result_list)
-
-
-
-    def match(self, labels=None, internal_id=None,
-              key_name=None, key_value=None, properties=None, clause=None, dummy_node_name="n") -> NodeSpecs:
-        """
-        Return a "NodeSpecs" object storing all the passed specifications (the "RAW match structure"),
-        as expected as argument in various other functions in this library,
-        in order to identify a node or group of nodes.
-
-        IMPORTANT:  if internal_id is provided, all other conditions are DISREGARDED;
-                    otherwise, an implicit AND applies to all the specified conditions.
-
-        Note:   NO database operation is actually performed by this function.
-
-        [Other names explored: identify(), preserve(), define_match(), locate(), choose() or identify()]
-
-        ALL THE ARGUMENTS ARE OPTIONAL (no arguments at all means "match everything in the database")
-        :param labels:      A string (or list/tuple of strings) specifying one or more Neo4j labels.
-                                (Note: blank spaces ARE allowed in the strings)
-                                EXAMPLES:  "cars"
-                                            ("cars", "powered vehicles")
-                            Note that if multiple labels are given, then only nodes with ALL of them will be matched;
-                            at present, there's no way to request an "OR" operation
-
-        :param internal_id: An integer with the node's internal database ID.
-                                If specified, it OVER-RIDES all the remaining arguments [except for the labels (TODO: revisit this)]
-
-        :param key_name:    A string with the name of a node attribute; if provided, key_value must be present, too
-        :param key_value:   The required value for the above key; if provided, key_name must be present, too
-                                Note: no requirement for the key to be primary
-
-        :param properties:  A (possibly-empty) dictionary of property key/values pairs, indicating a condition to match.
-                                EXAMPLE: {"gender": "F", "age": 22}
-
-        :param clause:      Either None, OR a (possibly empty) string containing a Cypher subquery,
-                            OR a pair/list (string, dict) containing a Cypher subquery and the data-binding dictionary for it.
-                            The Cypher subquery should refer to the node using the assigned dummy_node_name (by default, "n")
-                                IMPORTANT:  in the dictionary, don't use keys of the form "n_par_i",
-                                            where n is the dummy node name and i is an integer,
-                                            or an Exception will be raised - those names are for internal use only
-                                EXAMPLES:   "n.age < 25 AND n.income > 100000"
-                                            ("n.weight < $max_weight", {"max_weight": 100})
-
-        :param dummy_node_name: A string with a name by which to refer to the node (by default, "n");
-                                only used if a `clause` argument is passed
-
-        :return:            A python data dictionary, to preserve together all the passed arguments
-        """
-        return NodeSpecs(internal_id=internal_id,
-                         labels=labels, key_name=key_name, key_value=key_value,
-                         properties=properties, clause=clause, clause_dummy_name=dummy_node_name)
 
 
 
@@ -997,7 +1086,7 @@ class NeoAccess(NeoAccessCore):
 
 
 
-    def merge_node(self, labels, properties=None) -> dict:  # TODO: test
+    def merge_node(self, labels, properties=None) -> dict:
         """
         The node gets created only if no other node with same labels and properties exists.
 
@@ -1011,6 +1100,8 @@ class NeoAccess(NeoAccessCore):
         :return:            A dict with 2 keys: "created" (True if a new node was created, or False otherwise)
                                                 and "internal_id"
         """
+        # TODO: test
+
         if properties is None:
             properties = {}
 
@@ -1116,7 +1207,7 @@ class NeoAccess(NeoAccessCore):
         in the (possibly empty) list of link nodes, identified by their Neo4j internal ID's.
 
         The list of link nodes also contains the names to give to each link,
-        as well as their directions (by default OUTbound from the newly-created node)
+        as well as their directions (by default OUT-bound from the newly-created node)
         and, optionally, properties on the links.
 
         If any of the requested link nodes isn't found,
@@ -1125,7 +1216,7 @@ class NeoAccess(NeoAccessCore):
         Note: the new node may be created even in situations where Exceptions are raised;
               for example, if attempting to create two identical relationships to the same existing node.
 
-        EXAMPLE (assuming the nodes with the specified Neo4j IDs already exist):
+        EXAMPLE (assuming the nodes with the specified internal database IDs already exist):
             create_node_with_links(
                                 labels="PERSON",
                                 properties={"name": "Julian", "city": "Berkeley"},
@@ -1141,7 +1232,7 @@ class NeoAccess(NeoAccessCore):
         :param links:       Optional list of dicts identifying existing nodes,
                                 and specifying the name, direction and optional properties
                                 to give to the links connecting to them;
-                                use None, or an empty list, to indicate if there aren't any
+                                use None, or an empty list, to indicate if there aren't any.
                                 Each dict contains the following keys:
                                     "internal_id"   REQUIRED - to identify an existing node
                                     "rel_name"      REQUIRED - the name to give to the link
@@ -1210,7 +1301,7 @@ class NeoAccess(NeoAccessCore):
 
         # Assert that the query produced the expected actions
         if not merge:
-            if result.get("nodes_created" != 1):
+            if result.get("nodes_created", 0) != 1:
                 raise Exception("NeoAccess.create_node_with_links(): failed to create the new node "
                                 "(check whether the requested link-to nodes exist)")
 
@@ -1228,8 +1319,10 @@ class NeoAccess(NeoAccessCore):
         if result.get("relationships_created", 0) != len(links):
             raise Exception(f"NeoAccess.create_node_with_links(): failed to create all the {len(links)} requested relationships")
 
-        if result.get("properties_set", 0) != len(data_binding):
-            raise Exception(f"NeoAccess.create_node_with_links(): Was expecting to set {len(data_binding)} properties on the new node and its relationships; "
+        # Determine the number of entries in the data_binding dict, where the value isn't None
+        expected_number_properties = sum(1 for v in data_binding.values() if v is not None)
+        if result.get("properties_set", 0) != expected_number_properties:
+            raise Exception(f"NeoAccess.create_node_with_links(): Was expecting to set {expected_number_properties} properties on the new node and its relationships; "
                             f"instead, {result.get('properties_set')} got set")
 
         returned_data = result.get("returned_data")
@@ -1414,10 +1507,10 @@ class NeoAccess(NeoAccessCore):
             match_labels_str = CypherUtils.prepare_labels(match_labels)
             match_key = conn.get("key")
             if not match_key:
-                raise Exception("Missing key name for the node to link to")
+                raise Exception("create_node_with_relationships(): Missing key name for the node to link to")
             match_value = conn.get("value")
             if not match_value:
-                raise Exception("Missing key value for the node to link to")
+                raise Exception("create_node_with_relationships(): Missing key value for the node to link to")
 
             node_dummy_name = f"ex{i}"  # EXAMPLE: "ex3".   The "ex" stands for "existing node"
             data_binding_dummy = f"NODE{i}_VAL"
@@ -1432,7 +1525,7 @@ class NeoAccess(NeoAccessCore):
 
             rel_name = conn.get("rel_name")
             if not rel_name:
-                raise Exception("Missing name for the new relationship")
+                raise Exception("create_node_with_relationships(): Missing name for the new relationship")
 
             rel_dir = conn.get("rel_dir", "OUT")        # "OUT" is the default value
             rel_attrs = conn.get("rel_attrs", None)     # By default, no relationship attributes
@@ -1483,28 +1576,30 @@ class NeoAccess(NeoAccessCore):
 
         # Assert that the query produced the expected actions
         if result.get("nodes_created") != 1:
-            raise Exception("Failed to create 1 new node")
+            raise Exception("create_node_with_relationships(): Failed to create 1 new node")
 
         if result.get("relationships_created") != len(connections):
-            raise Exception(f"New node created as expected, but failed to create all the {len(connections)} expected relationships")
+            raise Exception(f"create_node_with_relationships(): "
+                            f"New node created as expected, but failed to create all the {len(connections)} expected relationships")
 
         expected_number_labels = (1 if type(labels) == str else len(labels))
         if result.get("labels_added") != expected_number_labels:
-            raise Exception(f"Failed to set the {expected_number_labels} label(s) expected on the new node")
+            raise Exception(f"create_node_with_relationships(): Failed to set the {expected_number_labels} label(s) expected on the new node")
 
         if result.get("properties_set") != number_props_to_set:
-            raise Exception(f"Failed to set all the {number_props_to_set} properties on the new node and its relationships")
+            raise Exception(f"create_node_with_relationships(): Failed to set all the {number_props_to_set} properties on the new node and its relationships")
 
         returned_data = result.get("returned_data")
         #print("returned_data", returned_data)
         if len(returned_data) == 0:
-            raise Exception("Unable to extract internal ID of the newly-created node")
+            raise Exception("create_node_with_relationships(): Unable to extract internal ID of the newly-created node")
 
         internal_id = returned_data[0].get("internal_id", None)
         if internal_id is None:    # Note: internal_id might be zero
-            raise Exception("Unable to extract internal ID of the newly-created node")
+            raise Exception("create_node_with_relationships(): Unable to extract internal ID of the newly-created node")
 
         return internal_id    # Return the Neo4j ID of the new node
+
 
 
 
@@ -1586,7 +1681,7 @@ class NeoAccess(NeoAccessCore):
 
 
 
-    def bulk_delete_by_label(self, label: str):    # TODO: test.  CAUTION: only tested interactively
+    def bulk_delete_by_label(self, label: str):
         """
         IMPORTANT: APOC required (starting from v 4.4 of Neo4j, will be able to do this without APOC; TODO: not yet tested)
 
@@ -1599,6 +1694,7 @@ class NeoAccess(NeoAccessCore):
         See:  https://neo4j.com/developer/kb/large-delete-transaction-best-practices-in-neo4j/
 
         TODO: generalize to bulk-deletion not just by label
+        TODO: test.  CAUTION: only tested interactively
 
         :param label:   A string with the label of the nodes to delete (blank spaces in name are ok)
         :return:        A dict with the keys "batches" and "total"
@@ -1654,9 +1750,6 @@ class NeoAccess(NeoAccessCore):
 
         Return the number of properties set.
 
-        TODO: if any field is blank, offer the option drop it altogether from the node,
-              with a "REMOVE n.field" statement in Cypher; doing SET n.field = "" doesn't drop it
-
         :param match:       EITHER an integer with an internal database node id,
                                 OR a "NodeSpecs" object, as returned by match(), with data to identify a node or set of nodes
         :param set_dict:    A dictionary of field name/values to create/update the node's attributes
@@ -1664,6 +1757,8 @@ class NeoAccess(NeoAccessCore):
 
         :return:            The number of properties set
         """
+        #         TODO: if any field is blank, offer the option drop it altogether from the node,
+        #               with a "REMOVE n.field" statement in Cypher; doing SET n.field = "" doesn't drop it
 
         if set_dict == {}:
             return 0             # There's nothing to do
@@ -1833,6 +1928,7 @@ class NeoAccess(NeoAccessCore):
 
     # TODO: add a method to remove all links of a given name emanating to or from a given node
     #       - as done for Schema.remove_all_data_relationship()
+    # TODO: add a rename_link() method
     def remove_links(self, match_from: Union[int, NodeSpecs], match_to: Union[int, NodeSpecs], rel_name) -> int:
         """
         Remove one or more links (aka relationships/edges)
@@ -1903,7 +1999,7 @@ class NeoAccess(NeoAccessCore):
 
         number_relationships_deleted = result.get("relationships_deleted", 0)   # If field isn't present, return a 0
         if number_relationships_deleted == 0:       # This could be more than 1: see notes above
-            raise Exception("remove_links(): no relationship was deleted")
+            raise Exception(f"remove_links(): no relationship named `{rel_name}` could be deleted")
 
         return number_relationships_deleted
 
@@ -1924,10 +2020,11 @@ class NeoAccess(NeoAccessCore):
                                   MUST use different clause dummy names.
 
         :param rel_name:    The name of the relationship to look for between the 2 specified nodes.
-                                Blanks are allowed
+                                Blanks are allowed inside the string
 
         :return:            True if one or more relationships were found, or False if not
         """
+        # TODO: maybe rename arguments from_match and to_match, for consistency with NeoSchema
         return self.number_of_links(match_from=match_from, match_to=match_to, rel_name=rel_name) >= 1   # True if at least 1
 
 
@@ -1947,10 +2044,13 @@ class NeoAccess(NeoAccessCore):
                                   MUST use different clause dummy names.
 
         :param rel_name:    The name of the relationship to look for between the 2 specified nodes or groups of nodes.
-                                Blanks are allowed
+                                Blanks are allowed inside the string
 
         :return:            The number of links (relationships) that were found
         """
+        # TODO: maybe rename arguments from_match and to_match, for consistency with NeoSchema
+        #TODO: allow unspecified relationship names
+        #TODO: allow specifying properties that must be in the relationship
         match_from = CypherUtils.process_match_structure(match_from, dummy_node_name="from", caller_method="number_of_links")
         match_to   = CypherUtils.process_match_structure(match_to, dummy_node_name="to", caller_method="number_of_links")
 
@@ -1967,7 +2067,7 @@ class NeoAccess(NeoAccessCore):
         # and also prefix (if appropriate) the WHERE keyword
         where_clause = CypherUtils.combined_where(match_from, match_to, check_compatibility=True)
 
-        # Prepare the query
+        # Prepare the query.   TODO: to be more efficient, do something like p=MATCH ....  RETURN COUNT(p) AS link_number
         q = f'''
             MATCH {nodes_from} -[r :`{rel_name}`]-> {nodes_to}
             {where_clause} 
@@ -2037,14 +2137,14 @@ class NeoAccess(NeoAccessCore):
 
         EXAMPLE:    link_nodes_by_ids(123, 88, "AVAILABLE_FROM", {'cost': 1000})
 
-        TODO: maybe return a status, or the Neo4j ID of the relationship just created
-
-        :param node_id1:    An integer with the Neo4j internal ID to locate the 1st node
-        :param node_id2:    An integer with the Neo4j internal ID to locate the 2nd node
-        :param rel:         A string specifying a Neo4j relationship name
-        :param rel_props:   Optional dictionary with the relationship properties.  EXAMPLE: {'since': 2003, 'code': 'xyz'}
+        :param node_id1:    An integer with the internal database ID to locate the 1st node
+        :param node_id2:    An integer with the internal database ID to locate the 2nd node
+        :param rel:         A string specifying a relationship name
+        :param rel_props:   Optional dictionary with the relationship properties.
+                                EXAMPLE: {'since': 2003, 'code': 'xyz'}
         :return:            None
         """
+        #TODO: maybe return a status, or the internal database ID of the relationship just created
 
         cypher_rel_props, cypher_dict = CypherUtils.dict_to_cypher(rel_props)  # Process the optional relationship properties
         # EXAMPLE of cypher_rel_props: '{cost: $par_1, code: $par_2}'   (possibly blank)
@@ -2056,10 +2156,10 @@ class NeoAccess(NeoAccessCore):
         MERGE (x)-[:`{rel}` {cypher_rel_props}]->(y)
         """
 
-        # Extend the (possibly empty) Cypher data dictionary, to also include a value for the key "node_id1" and "node_id2"
+        # Extend the (possibly empty) Cypher data dictionary,
+        # to also include a value for the keys "node_id1" and "node_id2"
         cypher_dict["node_id1"] = node_id1
         cypher_dict["node_id2"] = node_id2
-
 
         self.query(q, cypher_dict)
 
@@ -2108,22 +2208,28 @@ class NeoAccess(NeoAccessCore):
     #####################################################################################################
 
 
-    def follow_links(self, match: Union[int, NodeSpecs], rel_name: str, rel_dir ="OUT", neighbor_labels = None) -> [dict]:
+    def follow_links(self, match: Union[int, NodeSpecs], rel_name :str, rel_dir ="OUT", neighbor_labels = None) -> [dict]:
         """
-        From the given starting node(s), follow all the relationships of the given name to or from it,
-        into/from neighbor nodes (optionally having the given labels),
+        From the given starting node(s), follow all the relationships that have the specified name,
+        from/into neighbor nodes (optionally having the given labels),
         and return all the properties of those neighbor nodes.
-        TODO: add a method that fetches the ID's of those nodes, rather than their properties
 
         :param match:           EITHER an integer with an internal database node id,
-                                    OR a "NodeSpecs" object, as returned by match(), with data to identify a node or set of nodes
-        :param rel_name:        A string with the name of relationship to follow.  (Note: any other relationships are ignored)
+                                    OR a "NodeSpecs" object, as returned by match(),
+                                    with data to identify a node or set of nodes
+        :param rel_name:        A string with the name of relationship to follow.
+                                    (Note: any other relationships are ignored)
         :param rel_dir:         Either "OUT"(default), "IN" or "BOTH".  Direction(s) of the relationship to follow
-        :param neighbor_labels: Optional label(s) required on the neighbors.  If present, either a string or list of strings
+        :param neighbor_labels: Optional label(s) required on the neighbors.
+                                    If used, provide either a string or list of strings
 
         :return:                A list of dictionaries with all the properties of the neighbor nodes
-                                TODO: maybe add the option to just return a subset of fields
+                                    Note that the internal database ID is NOT considered a property.
+                                    TODO: add the option to just return a subset of fields
         """
+        # TODO: add a method that fetches the ID's of those nodes, rather than their properties
+        # TODO: add an option to also retrieve some or all the properties of the relationships
+
         match_structure = CypherUtils.process_match_structure(match, caller_method="follow_links")
 
         if self.debug:
@@ -2238,18 +2344,22 @@ class NeoAccess(NeoAccessCore):
                  will be considered "siblings" under rel_name="subcategory_of" and rel_dir="OUT
 
         :param internal_id: Integer with the internal database ID of the node of interest
-                                TODO: also accept a "CypherMatch" object
         :param rel_name:    The name of the relationship used to establish a "siblings" connection
         :param rel_dir:     (OPTIONAL) Either "OUT" (default) or "IN".  The link direction that is expected from the
                                 start node to its "parents" - and then IN REVERSE to the parent's children
         :param order_by:    (OPTIONAL) If specified, it must be the name of a field in
-                                the sibling nodes, to order the results by      TODO: test
+                                the sibling nodes, to order the results by; capitalization is ignored
         :return:            A list of dictionaries, with one element for each "sibling";
                                 each element contains the 'internal_id' and 'neo4j_labels' keys,
                                 plus whatever attributes are stored on that node.
                                 EXAMPLE of single element:
                                 {'name': 'French', 'internal_id': 123, 'neo4j_labels': ['Categories']}
         """
+        #TODO: test order_by
+        #TODO: test scenarios that are affected by the DISTINCT ; eg: 2 siblings that share the same 2 parent,
+        #      to avoid over-counting
+        #TODO: also accept a "CypherMatch" object for internal_id
+
         CypherUtils.assert_valid_internal_id(internal_id)
 
         assert type(rel_name) == str, \
@@ -2262,13 +2372,13 @@ class NeoAccess(NeoAccessCore):
             q = f"""
                 MATCH (n) - [:{rel_name}] -> (parent) <- [:{rel_name}] - (sibling)
                 WHERE id(n) = $internal_id
-                RETURN sibling
+                RETURN DISTINCT sibling
                 """
         elif rel_dir == "IN":
             q = f"""
                 MATCH (n) <- [:{rel_name}] - (parent) - [:{rel_name}] -> (sibling)
                 WHERE id(n) = $internal_id
-                RETURN sibling
+                RETURN DISTINCT sibling
                 """
         else:
             raise Exception(f"get_siblings(): unknown value for the `rel_dir` argument ({rel_dir}); "
@@ -2300,10 +2410,10 @@ class NeoAccess(NeoAccessCore):
         Extract and return a list of ALL the Neo4j labels present in the database.
         No particular order should be expected.
         Note: to get the labels of a particular node, use get_node_labels()
-        TODO: test when there are nodes that have multiple labels
 
         :return:    A list of strings
         """
+        #TODO: test when there are nodes that have multiple labels
         results = self.query("call db.labels() yield label return label")
         return [x['label'] for x in results]
 
@@ -2346,9 +2456,9 @@ class NeoAccess(NeoAccessCore):
         as a Pandas dataframe.
 
         EXAMPLE:
-               labelsOrTypes              name          properties    type  uniqueness
-             0    ["my_label"] "index_23b59623"    ["my_property"]   BTREE   NONUNIQUE
-             1    ["L"]          "L.client_id"       ["client_id"]   BTREE      UNIQUE
+                 labelsOrTypes              name          properties    type  uniqueness
+             0    ["my_label"]  "index_23b59623"     ["my_property"]   BTREE   NONUNIQUE
+             1    ["L"]            "L.client_id"       ["client_id"]   BTREE      UNIQUE
 
         :return:        A (possibly-empty) Pandas dataframe
         """
@@ -2451,7 +2561,7 @@ class NeoAccess(NeoAccessCore):
     #####################################################################################################
 
 
-    def get_constraints(self) -> pd.DataFrame:    # TODO: it doesn't work in version 5.5 of the database
+    def get_constraints(self) -> pd.DataFrame:
         """
         Return all the database constraints, and some of their attributes,
         as a Pandas dataframe with 3 columns:
@@ -2459,8 +2569,11 @@ class NeoAccess(NeoAccessCore):
             description EXAMPLE: "CONSTRAINT ON ( patient:patient ) ASSERT (patient.patient_id) IS UNIQUE"
             details     EXAMPLE: "Constraint( id=3, name='my_constraint', type='UNIQUENESS',
                                   schema=(:patient {patient_id}), ownedIndex=12 )"
-        :return:  A (possibly-empty) Pandas dataframe
+
+        :return:  A (possibly-empty) Pandas dataframe with 3 columns: 'name', 'description', 'details'
         """
+        # TODO: it doesn't work in version 5.5 of the database
+        # TODO: provide a more friendly display output (long field values aren't handled well in Pandas displays)
         q = """
            call db.constraints() 
            yield name, description, details
@@ -2470,7 +2583,7 @@ class NeoAccess(NeoAccessCore):
         if len(results) > 0:
             return pd.DataFrame(list(results))
         else:
-            return pd.DataFrame([], columns=['name'])
+            return pd.DataFrame([], columns=['name', 'description', 'details'])
 
 
 
@@ -2510,7 +2623,8 @@ class NeoAccess(NeoAccessCore):
 
     def drop_constraint(self, name: str) -> bool:
         """
-        Eliminate the constraint with the specified name.
+        Eliminate the constraint with the specified name
+
         :param name:    Name of the constraint to eliminate
         :return:        True if successful or False otherwise (for example, if the constraint doesn't exist)
         """
@@ -2526,6 +2640,7 @@ class NeoAccess(NeoAccessCore):
     def drop_all_constraints(self) -> None:
         """
         Eliminate all the constraints in the database
+
         :return:    None
         """
         constraints = self.get_constraints()
@@ -2543,8 +2658,7 @@ class NeoAccess(NeoAccessCore):
         pass        # Used to get a better structure view in IDEs
     #####################################################################################################
 
-    def load_pandas(
-            self,
+    def load_pandas(self,
             df :Union[pd.DataFrame, pd.Series], labels :Union[str, List[str], Tuple[str]],
             merge_primary_key=None, merge_overwrite=False,
             rename=None, ignore_nan=True, max_chunk_size=10000) -> [int]:
@@ -2554,6 +2668,8 @@ class NeoAccess(NeoAccessCore):
 
         Columns whose dtype is integer will appear as integer data types in the Neo4j nodes
             (however, if a NaN is present in a Pandas column, it'll automatically be transformed to float)
+
+        Any Pandas' datetime values get converted to Neo4j's format.
 
         Database indexes are added as needed, if the "merge_primary_key" argument is used.
 
@@ -2567,14 +2683,15 @@ class NeoAccess(NeoAccessCore):
         :param labels:          A string, or list/tuple of strings - representing one or more Neo4j labels
                                     to use on all the newly-created nodes
 
-        :param merge_primary_key: (OPTIONAL) Used to request that new records be merged (rather than added)
-                                    if they already exist, as determined by the string with the name of the field
-                                    that serves as a primary key.
+        :param merge_primary_key: (OPTIONAL) A string with the name of the field that serves as a primary key
+                                    If provided, new records will be merged (rather than added) if they already exist,
+                                    as determined by that primary key
                                     TODO: to allow for list of primary_keys
         :param merge_overwrite: (OPTIONAL) Only applicable if "merge_primary_key" is set.
                                     If True then on merge the existing nodes will be completely overwritten with the new data,
                                     otherwise they will be updated with new information (keys that are not present
                                     in the df argument will be left unaltered)
+                                    TODO: offer an option to completely ignore the duplicate node
 
         :param rename:          Optional dictionary to rename the Pandas dataframe's columns to
                                     EXAMPLE {"current_name": "name_we_want"}
@@ -2582,10 +2699,13 @@ class NeoAccess(NeoAccessCore):
                                     will only be set if they are not NaN.
                                     (Note: the moment a NaN is present, columns of integers in a dataframe
                                            will automatically become floats)
-        :param max_chunk_size:  To limit the number of rows loaded at one time
+        :param max_chunk_size:  To limit the number of Pandas rows loaded into the database at one time
 
         :return:                A (possibly-empty) list of the internal database ID's of the created nodes
         """
+        # TODO: ditch empty strings; trim leading/trailing blanks from strings
+        #       Consider using the approach from NeoSchema.import_pandas_nodes()
+
         if isinstance(df, pd.Series):
             # Convert a Pandas Series into a Data Frame
             if df.name is None:
@@ -2617,7 +2737,8 @@ class NeoAccess(NeoAccessCore):
                 time.sleep(1)   # Used to give Neo4j time to populate the index
 
             primary_key_s = ' {' + f'`{merge_primary_key}`:record[\'{merge_primary_key}\']' + '}'
-            # EXAMPLE of primary_key_s: "{patient_id:record['patient_id']}"
+            # EXAMPLE of primary_key_s , assuming that the argument `merge_primary_key` is "patient_id":
+            #                           "{patient_id:record['patient_id']}"
             # Note that "record" is a dummy name used in the Cypher query, further down
 
 
@@ -2628,7 +2749,7 @@ class NeoAccess(NeoAccessCore):
                 #if dtype in ['float64', 'float32']:
                 if pd.api.types.is_float_dtype(dtype):  # This will cover all floats
                                                         # Note: a column with a NaN is automatically a float even if all values are int
-                    numeric_columns.append(col)
+                    numeric_columns.append(col)         # We're making a note of this column being numeric
 
         if merge_primary_key in numeric_columns:
             assert not (df[merge_primary_key].isna().any()), \
@@ -2648,17 +2769,17 @@ class NeoAccess(NeoAccessCore):
         res = []                                                # Running list of the internal database ID's of the created nodes
 
         # Determine the number of needed batches (always at least 1)
-        number_batches = math.ceil(len(df) / max_chunk_size)    # Note that if the max_chunk_size equals the size of the df
+        number_batches = math.ceil(len(df) / max_chunk_size)    # Note that if the max_chunk_size equals the size of df
                                                                 # then we'll just use 1 batch
 
-        batch_list = np.array_split(df, number_batches)         # List of Pandas Data Frames
+        batch_list = np.array_split(df, number_batches)         # List of Pandas Data Frames, each resulting from split of original Data Frame
+                                                                # from groups of rows
 
-        for df_chunk in batch_list:         # Split the operation into batches
-            # df_chunk is a Pandas Data Frame
-            record_list = df_chunk.to_dict(orient='records')    # Example: [{'col1': 1, 'col2': 0.5}, {'col1': 2, 'col2': 0.75}]
-                                                                # Note: PyCharm complains about to_dict()
-                                                                #       because it fails to realize that df_chunk is a dataframe,
-                                                                #       not an ndarray
+        for df_chunk in batch_list:         # Split the import operation into batches
+            # df_chunk is a Pandas Data Frame, with the same columns, but fewer rows, as the original df
+            record_list = df_chunk.to_dict(orient='records')    # List of dicts; each dict contains the data for 1 row
+                                                                # EXAMPLE: [{'col1': 1, 'col2': 0.5}, {'col1': 2, 'col2': 0.75}]
+
             if numeric_columns:
                 q = f'''
                     WITH $data AS data 
@@ -2680,7 +2801,7 @@ class NeoAccess(NeoAccessCore):
                 cypher_dict = {'data':record_list}
 
 
-            res_chunk = self.query(q, cypher_dict, single_column="node_id") # A (possibly empty) list of internal ID's
+            res_chunk = self.query(q, cypher_dict, single_column="node_id")     # A (possibly empty) list of internal ID's
             res += res_chunk
         # END for loop
 
@@ -2690,11 +2811,14 @@ class NeoAccess(NeoAccessCore):
 
     def pd_datetime_to_neo4j_datetime(self, df: pd.DataFrame) -> pd.DataFrame:
         """
-        If any column in the given Pandas Data Frame is of dtype datetime or timedelta,
-        replace its entries with a Neo4j-friendly datetime type.
+        If any column in the given Pandas DataFrame is of dtype datetime or timedelta,
+        clone the Data Frame and replace its entries with a Neo4j-friendly datetime type.
 
         If any change is needed, return a modified COPY of the dataframe;
         otherwise, return the original dataframe (no cloning done)
+
+        Note: one must be vigilant against STRING columns with values that look like datetimes,
+              but are not of that type!
 
         EXAMPLE: an entry such as pd.Timestamp('2023-01-01 00:00:00')
                  will become an object neo4j.time.DateTime(2023, 1, 1, 0, 0, 0, 0)
@@ -2752,9 +2876,9 @@ class NeoAccess(NeoAccessCore):
         :param labels:      A string, or list/tuple of strings, representing one or multiple Neo4j labels;
                                 it's acceptable to be None
         :param os:          Either "linux" or "win"
-        :param headers:         TODO: implement
-        :param rename_fields:   TODO: implement
-                                    Example: {"name": "Product Name", "n_parts": "Number of Parts"}
+        :param headers:     TODO: implement
+        :param rename:      TODO: implement
+                                Example: {"name": "Product Name", "n_parts": "Number of Parts"}
         :param field_types: (OPTIONAL) if not specified, all values get imported as STRINGS
                                 TODO: implement
                                     Example: {"product_id": "int", "cost": "float"}
@@ -2818,10 +2942,9 @@ class NeoAccess(NeoAccessCore):
     #####################################################################################################
 
 
-    def export_dbase_json(self) -> {}:
+    def export_dbase_json(self) -> dict:
         """
         Export the entire Neo4j database as a JSON string.
-        TODO: offer an option to automatically include today's date in the name of exported file
 
         IMPORTANT: APOC must be activated in the database, to use this function.
                    Otherwise it'll raise an Exception
@@ -2832,11 +2955,11 @@ class NeoAccess(NeoAccessCore):
           'properties': 6,
           'data': '[{"type":"node","id":"3","labels":["User"],"properties":{"name":"Adam","age":32,"male":true}},\n
                     {"type":"node","id":"4","labels":["User"],"properties":{"name":"Eve","age":18}},\n
-                    {"id":"1","type":"relationship","label":"KNOWS","properties":{"since":2003},"start":{"id":"3","labels":["User"]},"end":{"id":"4","labels":["User"]}}\n
+                    {"type":"relationship","id":"1","label":"KNOWS","properties":{"since":2003},"start":{"id":"3","labels":["User"],"properties":{"name":"Eve"}},"end": {"id":"4","labels":["User"],"properties":{"name":"Adam","age":30}}}\n
                    ]'
         }
 
-        SIDE NOTE: the Neo4j Browser uses a slightly different format for NODES:
+        SIDE NOTE: the Neo4j *Browser* uses a slightly different format for NODES:
                 {
                   "identity": 4,
                   "labels": [
@@ -2858,10 +2981,11 @@ class NeoAccess(NeoAccessCore):
                   }
                 }
 
-        :return:    A dictionary specifying the number of nodes exported ("nodes"),
-                    the number of relationships ("relationships"),
-                    and the number of properties ("properties"),
-                    as well as a "data" field with the actual export as a JSON string
+        :return:    A dictionary with the following entries:
+                        "nodes":            the number of nodes exported
+                        "relationships":    the number of relationships exported
+                        "properties":       the number of properties exported
+                        "data":             the actual export as a JSON string that encodes a list of dict's
         """
         cypher = '''
             CALL apoc.export.json.all(null, {useTypes: true, stream: true, jsonFormat: "JSON_LINES"})
@@ -2869,6 +2993,7 @@ class NeoAccess(NeoAccessCore):
             RETURN nodes, relationships, properties, data
             '''
         # TODO: unclear if the part "useTypes: true" is needed
+        # TODO: export in batches
 
         result = self.query(cypher)     # It returns a list with a single element
         export_dict = result[0]         # This will be a dictionary with 4 keys: "nodes", "relationships", "properties", "data"
@@ -2876,7 +3001,7 @@ class NeoAccess(NeoAccessCore):
 
         json_lines = export_dict["data"]
         # Tweak the "JSON_LINES" format to make it a valid JSON string, and more readable.
-        # See https://neo4j.com/labs/apoc/4.3/export/json/#export-nodes-relationships-json
+        # See https://neo4j.com/labs/apoc/4.4/export/json/
         json_str = "[" + json_lines.replace("\n", ",\n ") + "\n]"   # The newlines \n make the JSON much more human-readable
         export_dict["data"] = json_str                              # Replace the "data" value
 
@@ -2941,8 +3066,8 @@ class NeoAccess(NeoAccessCore):
         result = self.query(cypher)     # It returns a list with a single element
         #print("In export_nodes_rels_json(): result = ", result)
 
-        export_dict = result[0]     # This will be a dictionary with 4 keys: "nodes", "relationships", "properties", "data"
-        #   "nodes", "relationships" and "properties" contain their respective counts
+        export_dict = result[0]         # This will be a dictionary with 4 keys: "nodes", "relationships", "properties", "data"
+                                        #   "nodes", "relationships" and "properties" contain their respective counts
 
         json_lines = export_dict["data"]
         # Tweak the "JSON_LINES" format to make it a valid JSON string, and more readable.
@@ -2978,7 +3103,6 @@ class NeoAccess(NeoAccessCore):
         CAUTION: A "postorder" approach is followed: create subtrees first (with recursive calls), then create root last;
         as a consequence, in case of failure mid-import, there's no top root, and there could be several fragments.
         A partial import might need to be manually deleted.
-        TODO: maintain a list of all created nodes - so as to be able to delete them all in case of failure.
 
         :param json_str:    A JSON string representing the data to import
         :param root_labels: String, or list of strings, to be used as Neo4j labels for the root node(s)
@@ -2988,6 +3112,7 @@ class NeoAccess(NeoAccessCore):
 
         :return:            List of integer ID's (possibly empty), of the root node(s) created
         """
+        #T ODO: maintain a list of all created nodes - so as to be able to delete them all in case of failure.
         # Try to obtain Python data (which ought to be a dict or list) that corresponds to the passed JSON string
         try:
             json_data = json.loads(json_str)    # Turn the string (representing JSON data) into its Python counterpart;
@@ -3081,13 +3206,14 @@ class NeoAccess(NeoAccessCore):
         """
         Import data from a Python dictionary.
         If the data is nested, it uses a recursive call to create_nodes_from_python_data()
-        TODO: pytest
 
         :param d:       A Python dictionary with data to import
         :param labels:  String, or list of strings, to be used as Neo4j labels for the node
         :param level:   Integer with recursion level (used just to format debugging output)
         :return:        Integer with the internal database id of the newly-created (top-level) node
         """
+        # TODO: pytest
+
         indent_str = self.indent_chooser(level)
 
         node_properties = {}    # Dictionary to be filled in with all the properties of the new node
@@ -3133,13 +3259,14 @@ class NeoAccess(NeoAccessCore):
         """
         Import data from a list.
         If the data is nested, it uses a recursive call to create_nodes_from_python_data()
-        TODO: pytest
 
         :param l:       A list with data to import
         :param labels:  String, or list of strings, to be used as Neo4j labels for the node
         :param level:   Integer with recursion level (just used to format debugging output)
         :return:        List (possibly empty) of internal database id's of the newly-created nodes
         """
+        # TODO: pytest
+
         indent_str = self.indent_chooser(level)
         if len(l) == 0:
             self.debug_print(f"{indent_str}The list is empty; so, ignoring it (Returning an empty list)")
@@ -3283,6 +3410,7 @@ class NeoAccess(NeoAccessCore):
 
 
 
+
     #####################################################################################################
 
     '''                                   ~   DEBUGGING SUPPORT   ~                                   '''
@@ -3294,7 +3422,7 @@ class NeoAccess(NeoAccessCore):
 
     def debug_print(self, info: str, trim=False) -> None:
         """
-        If the class' property "debug" is set to True,
+        If the class property "debug" is set to True,
         print out the passed info string,
         optionally trimming it, if too long
 

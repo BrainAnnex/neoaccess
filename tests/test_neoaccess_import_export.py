@@ -2,7 +2,9 @@
 ####  WARNING : the database will get erased!!!
 
 import pytest
+import json
 from src.neoaccess import neoaccess as neo_access
+from utilities.comparisons import compare_recordsets
 
 
 
@@ -14,7 +16,7 @@ def db():
 
 
 
-def test_export_dbase_json(db):     # TODO: this test intermittently fails due to varying order; to fix
+def test_export_dbase_json(db):
     # Completely clear the database
     db.empty_dbase()
 
@@ -61,16 +63,28 @@ def test_export_dbase_json(db):     # TODO: this test intermittently fails due t
     assert result['nodes'] == 2
     assert result['relationships'] == 1
     assert result['properties'] == 3
+
+    actual_json = result['data']
     expected_json = f'[{{"type":"node","id":"{node_id_eve}","labels":["User"],"properties":{{"name":"Eve"}}}},\n' \
                     f' {{"type":"node","id":"{node_id_adam}","labels":["User"],"properties":{{"name":"Adam","age":30}}}},\n' \
-                    f' {{"id":"{rel_id_1}","type":"relationship","label":"LOVES","start":{{"id":"{node_id_eve}","labels":["User"]}},"end":{{"id":"{node_id_adam}","labels":["User"]}}}}\n]'
-    assert result['data'] == expected_json
+                    f' {{"type":"relationship","id":"{rel_id_1}","label":"LOVES","start":{{"id":"{node_id_eve}","labels":["User"],"properties":{{"name":"Eve"}}}},"end":{{"id":"{node_id_adam}","labels":["User"],"properties":{{"name":"Adam","age":30}}}}}}\n]'
     ''' EXAMPLE of JSON string:
-        [{"type":"node","id":"108","labels":["User"],"properties":{"name":"Eve"}},
-         {"type":"node","id":"109","labels":["User"],"properties":{"name":"Adam","age":30}},
-         {"id":"3","type":"relationship","label":"LOVES","start":{"id":"108","labels":["User"]},"end":{"id":"109","labels":["User"]}}
-        ]
+            [
+                {"type":"node","id":"21","labels":["User"],"properties":{"name":"Eve"}},
+                {"type":"node","id":"22","labels":["User"],"properties":{"name":"Adam","age":30}},
+                {"type":"relationship","id":"8","label":"LOVES","start":{"id":"21","labels":["User"],"properties":{"name":"Eve"}},"end":{"id":"22","labels":["User"],"properties":{"name":"Adam","age":30}}}
+            ]
     '''
+
+    # We cannot directly compare the JSON strings because the nodes might be returned in different order;
+    # if directly compared, this test intermittently fails!
+    # We need to first parse the JSON strings into a python entities and then assert
+    actual_json_data = json.loads(actual_json)
+    expected_json_data = json.loads(expected_json)
+    #print("\nACTUAL RESULT:\n", actual_json_data)
+    #print("\nEXPECTED:\n", expected_json_data)
+    assert compare_recordsets(actual_json_data, expected_json_data)
+
 
     # Add a 2nd relationship (this time with properties) between the two nodes
     db.link_nodes_by_ids(node_id_eve, node_id_adam, "KNOWS", {'since': 1976, 'intensity': 'eternal'})
@@ -83,31 +97,29 @@ def test_export_dbase_json(db):     # TODO: this test intermittently fails due t
     assert result['nodes'] == 2
     assert result['relationships'] == 2
     assert result['properties'] == 5    # Note that the 2 properties in the latest relationship went into the count
+
+    actual_json = result['data']
     expected_json = f'[{{"type":"node","id":"{node_id_eve}","labels":["User"],"properties":{{"name":"Eve"}}}},\n' \
                     f' {{"type":"node","id":"{node_id_adam}","labels":["User"],"properties":{{"name":"Adam","age":30}}}},\n' \
-                    f' {{"id":"{rel_id_1}","type":"relationship","label":"LOVES","start":{{"id":"{node_id_eve}","labels":["User"]}},"end":{{"id":"{node_id_adam}","labels":["User"]}}}},\n' \
-                    f' {{"id":"{rel_id_2}","type":"relationship","label":"KNOWS","properties":{{"intensity":"eternal","since":1976}},"start":{{"id":"{node_id_eve}","labels":["User"]}},"end":{{"id":"{node_id_adam}","labels":["User"]}}}}\n]'
+                    f' {{"id":"{rel_id_1}","type":"relationship","label":"LOVES","start":{{"id":"{node_id_eve}","labels":["User"],"properties":{{"name":"Eve"}}}},"end":{{"id":"{node_id_adam}","labels":["User"],"properties":{{"name":"Adam","age":30}}}}}},\n' \
+                    f' {{"id":"{rel_id_2}","type":"relationship","label":"KNOWS","properties":{{"intensity":"eternal","since":1976}},"start":{{"id":"{node_id_eve}","labels":["User"],"properties":{{"name":"Eve"}}}},"end":{{"id":"{node_id_adam}","labels":["User"],"properties":{{"name":"Adam","age":30}}}}}}\n]'
     ''' EXAMPLE of JSON string:
-        [{"type":"node","id":"124","labels":["User"],"properties":{"name":"Eve"}},
-         {"type":"node","id":"125","labels":["User"],"properties":{"name":"Adam","age":30}},
-         {"id":"11","type":"relationship","label":"LOVES","start":{"id":"124","labels":["User"]},"end":{"id":"125","labels":["User"]}},
-         {"id":"12","type":"relationship","label":"KNOWS","properties":{"intensity":"eternal","since":1976},"start":{"id":"124","labels":["User"]},"end":{"id":"125","labels":["User"]}}
+        [   {"type":"node","id":"33","labels":["User"],"properties":{"name":"Eve"}},
+            {"type":"node","id":"34","labels":["User"],"properties":{"name":"Adam","age":30}},
+            {"type":"relationship","id":"15","label":"LOVES","start":{"id":"33","labels":["User"],"properties":{"name":"Eve"}},"end":{"id":"34","labels":["User"],"properties":{"name":"Adam","age":30}}},
+            {"type":"relationship","id":"16","label":"KNOWS","properties":{"intensity":"eternal","since":1976},"start":{"id":"33","labels":["User"],"properties":{"name":"Eve"}},"end":{"id":"34","labels":["User"],"properties":{"name":"Adam","age":30}}}
         ]
     '''
-
-    # The order of the relationships appears to vary randomly: also cover the reverse the lines for "LOVES" and "KNOWS"
-    # (TODO: it may be better to first parse the JSON string into a python entity and then assert)
-    expected_json_reversed_order = f'[{{"type":"node","id":"{node_id_eve}","labels":["User"],"properties":{{"name":"Eve"}}}},\n' \
-                    f' {{"type":"node","id":"{node_id_adam}","labels":["User"],"properties":{{"name":"Adam","age":30}}}},\n' \
-                    f' {{"id":"{rel_id_2}","type":"relationship","label":"KNOWS","properties":{{"intensity":"eternal","since":1976}},"start":{{"id":"{node_id_eve}","labels":["User"]}},"end":{{"id":"{node_id_adam}","labels":["User"]}}}},\n' \
-                    f' {{"id":"{rel_id_1}","type":"relationship","label":"LOVES","start":{{"id":"{node_id_eve}","labels":["User"]}},"end":{{"id":"{node_id_adam}","labels":["User"]}}}}\n]'
-
-    assert (result['data'] == expected_json) or (result['data'] == expected_json_reversed_order)
+    # We need to first parse the JSON strings into a python entities and then assert
+    actual_json_data = json.loads(actual_json)
+    expected_json_data = json.loads(expected_json)
+    #print("\nACTUAL RESULT:\n", actual_json_data)
+    #print("\nEXPECTED:\n", expected_json_data)
+    assert compare_recordsets(actual_json_data, expected_json_data)
 
 
 
-def test_export_nodes_rels_json(db):    # TODO: this test intermittently fails, due an assert issue involving order in a JSON string;
-                                        #       it may be better to first parse the JSON string into a python entity and then assert
+def test_export_nodes_rels_json(db):
     db.empty_dbase()
 
     # Start by exporting everything in the empty database
@@ -116,6 +128,7 @@ def test_export_nodes_rels_json(db):    # TODO: this test intermittently fails, 
 
     # Create a first node ("Eve")
     node_id_eve = db.create_node("User", {'name': 'Eve'})
+    #print(f"'Eve' user node created, with internal ID: {node_id_eve}")
     result = db.export_nodes_rels_json()    # By default, all nodes and all relationships
     assert result['nodes'] == 1
     assert result['relationships'] == 0
@@ -138,15 +151,26 @@ def test_export_nodes_rels_json(db):    # TODO: this test intermittently fails, 
     assert result['nodes'] == 2
     assert result['relationships'] == 0
     assert result['properties'] == 3
+
+    actual_json = result['data']
     expected_json = f'[{{"type":"node","id":"{node_id_eve}","labels":["User"],"properties":{{"name":"Eve"}}}},\n {{"type":"node","id":"{node_id_adam}","labels":["User"],"properties":{{"name":"Adam","age":30}}}}\n]'
-    assert result['data'] == expected_json
     ''' EXAMPLE of JSON string:
-                [{"type":"node","id":"100","labels":["User"],"properties":{"name":"Eve"}},
-                 {"type":"node","id":"101","labels":["User"],"properties":{"name":"Adam","age":30}}
+                [   {"type":"node","id":"100","labels":["User"],"properties":{"name":"Eve"}},
+                    {"type":"node","id":"101","labels":["User"],"properties":{"name":"Adam","age":30}}
                 ]
     '''
 
-    # Overlook the "Adam" entry, and just pick up "Eve"
+    # We cannot directly compare the JSON strings because the nodes might be returned in different order;
+    # if directly compared, this test intermittently fails!
+    # We need to first parse the JSON strings into a python entities and then assert
+    actual_json_data = json.loads(actual_json)
+    expected_json_data = json.loads(expected_json)
+    #print("\nACTUAL RESULT:\n", actual_json_data)
+    #print("\nEXPECTED:\n", expected_json_data)
+    assert compare_recordsets(actual_json_data, expected_json_data)
+
+
+    # Skip the "Adam" entry, and just pick up "Eve" for export
     result = db.export_nodes_rels_json(nodes_query = "MATCH (n) WHERE n.name = 'Eve'")
     assert result['nodes'] == 1
     assert result['relationships'] == 0
@@ -172,22 +196,29 @@ def test_export_nodes_rels_json(db):    # TODO: this test intermittently fails, 
     assert result['properties'] == 3
     expected_json = f'[{{"type":"node","id":"{node_id_eve}","labels":["User"],"properties":{{"name":"Eve"}}}},\n' \
                     f' {{"type":"node","id":"{node_id_adam}","labels":["User"],"properties":{{"name":"Adam","age":30}}}},\n' \
-                    f' {{"id":"{rel_id_1}","type":"relationship","label":"LOVES","start":{{"id":"{node_id_eve}","labels":["User"]}},"end":{{"id":"{node_id_adam}","labels":["User"]}}}}\n]'
+                    f' {{"type":"relationship","id":"{rel_id_1}","label":"LOVES","start":{{"id":"{node_id_eve}","labels":["User"],"properties":{{"name":"Eve"}}}},"end":{{"id":"{node_id_adam}","labels":["User"],"properties":{{"name":"Adam","age":30}}}}}}\n]'
+    #print("RESULT:\n", result['data'])
+    #print("\nEXPECTED:\n", expected_json)
+
+
     assert result['data'] == expected_json
     ''' EXAMPLE of JSON string:
         [{"type":"node","id":"108","labels":["User"],"properties":{"name":"Eve"}},
          {"type":"node","id":"109","labels":["User"],"properties":{"name":"Adam","age":30}},
-         {"id":"3","type":"relationship","label":"LOVES","start":{"id":"108","labels":["User"]},"end":{"id":"109","labels":["User"]}}
+         {"type":"relationship","id":"160","label":"LOVES","start":{"id":"244","labels":["User"],"properties":{"name":"Eve"}},"end":{"id":"245","labels":["User"],"properties":{"name":"Adam","age":30}}}
         ]
     '''
 
-    # Only retrieve the "Adam" node, plus all relationships
+    # Only export the "Adam" node, plus all relationships   TODO: this is probably a bad feature that ought to be blocked!
     result = db.export_nodes_rels_json(nodes_query = "MATCH (n {name: 'Adam'})")    # Retrieves 1 node and 1 relationship
     assert result['nodes'] == 1
     assert result['relationships'] == 1
     assert result['properties'] == 2    # The "name" and "age" for the `Adam` node
     expected_json = f'[{{"type":"node","id":"{node_id_adam}","labels":["User"],"properties":{{"name":"Adam","age":30}}}},\n' \
-                    f' {{"id":"{rel_id_1}","type":"relationship","label":"LOVES","start":{{"id":"{node_id_eve}","labels":["User"]}},"end":{{"id":"{node_id_adam}","labels":["User"]}}}}\n]'
+                    f' {{"type":"relationship","id":"{rel_id_1}","label":"LOVES","start":{{"id":"{node_id_eve}","labels":["User"],"properties":{{"name":"Eve"}}}},"end":{{"id":"{node_id_adam}","labels":["User"],"properties":{{"name":"Adam","age":30}}}}}}\n]'
+    #print("RESULT:\n", result['data'])
+    #print("\nEXPECTED:\n", expected_json)
+
     assert result['data'] == expected_json
     ''' EXAMPLE of JSON string:
         [{"type":"node","id":"109","labels":["User"],"properties":{"name":"Adam","age":30}},
@@ -195,26 +226,30 @@ def test_export_nodes_rels_json(db):    # TODO: this test intermittently fails, 
         ]
     '''
 
-    # Only retrieve the "Adam" node, and no relationships
+    # Only export the "Adam" node, and no relationships
     result = db.export_nodes_rels_json( nodes_query = "MATCH (n {name: 'Adam'})",
                                         rels_query = "MATCH ()-[r :NO_SUCH_NAME]->()")    # Retrieves 1 node and 0 relationships
     assert result['nodes'] == 1
     assert result['relationships'] == 0
     assert result['properties'] == 2    # The "name" and "age" for the `Adam` node
     expected_json = f'[{{"type":"node","id":"{node_id_adam}","labels":["User"],"properties":{{"name":"Adam","age":30}}}}\n]'
+    #print("RESULT:\n", result['data'])
+    #print("\nEXPECTED:\n", expected_json)
     assert result['data'] == expected_json
     ''' EXAMPLE of JSON string:
         [{"type":"node","id":"109","labels":["User"],"properties":{"name":"Adam","age":30}}
         ]
     '''
 
-    # Only retrieve the relationship
+    # Only export the relationship
     result = db.export_nodes_rels_json(nodes_query = "MATCH (n :NON_EXISTENT_LABEL)")    # Only the relationship will be found
     assert result['nodes'] == 0
     assert result['relationships'] == 1
     assert result['properties'] == 0
+    expected_json = f'[{{"type":"relationship","id":"{rel_id_1}","label":"LOVES","start":{{"id":"{node_id_eve}","labels":["User"],"properties":{{"name":"Eve"}}}},"end":{{"id":"{node_id_adam}","labels":["User"],"properties":{{"name":"Adam","age":30}}}}}}\n]'
+    #print("RESULT:\n", result['data'])
+    #print("\nEXPECTED:\n", expected_json)
 
-    expected_json = f'[{{"id":"{rel_id_1}","type":"relationship","label":"LOVES","start":{{"id":"{node_id_eve}","labels":["User"]}},"end":{{"id":"{node_id_adam}","labels":["User"]}}}}\n]'
     assert result['data'] == expected_json
     ''' EXAMPLE of JSON string:
         [{"id":"3","type":"relationship","label":"LOVES","start":{"id":"108","labels":["User"]},"end":{"id":"109","labels":["User"]}}
@@ -241,24 +276,23 @@ def test_export_nodes_rels_json(db):    # TODO: this test intermittently fails, 
     assert result['properties'] == 5    # Note that the 2 properties in the latest relationship went into the count
     expected_json = f'[{{"type":"node","id":"{node_id_eve}","labels":["User"],"properties":{{"name":"Eve"}}}},\n' \
                     f' {{"type":"node","id":"{node_id_adam}","labels":["User"],"properties":{{"name":"Adam","age":30}}}},\n' \
-                    f' {{"id":"{rel_id_1}","type":"relationship","label":"LOVES","start":{{"id":"{node_id_eve}","labels":["User"]}},"end":{{"id":"{node_id_adam}","labels":["User"]}}}},\n' \
-                    f' {{"id":"{rel_id_2}","type":"relationship","label":"KNOWS","properties":{{"intensity":"eternal","since":1976}},"start":{{"id":"{node_id_eve}","labels":["User"]}},"end":{{"id":"{node_id_adam}","labels":["User"]}}}}\n]'
+                    f' {{"type":"relationship","id":"{rel_id_1}","label":"LOVES","start":{{"id":"{node_id_eve}","labels":["User"],"properties":{{"name":"Eve"}}}},"end":{{"id":"{node_id_adam}","labels":["User"],"properties":{{"name":"Adam","age":30}}}}}},\n' \
+                    f' {{"type":"relationship","id":"{rel_id_2}","label":"KNOWS","properties":{{"intensity":"eternal","since":1976}},"start":{{"id":"{node_id_eve}","labels":["User"],"properties":{{"name":"Eve"}}}},"end":{{"id":"{node_id_adam}","labels":["User"],"properties":{{"name":"Adam","age":30}}}}}}\n]'
     ''' EXAMPLE of JSON string:
-        [{"type":"node","id":"124","labels":["User"],"properties":{"name":"Eve"}},
-         {"type":"node","id":"125","labels":["User"],"properties":{"name":"Adam","age":30}},
-         {"id":"11","type":"relationship","label":"LOVES","start":{"id":"124","labels":["User"]},"end":{"id":"125","labels":["User"]}},
-         {"id":"12","type":"relationship","label":"KNOWS","properties":{"intensity":"eternal","since":1976},"start":{"id":"124","labels":["User"]},"end":{"id":"125","labels":["User"]}}
-        ]
+         [{"type":"node","id":"21","labels":["User"],"properties":{"name":"Eve"}},
+          {"type":"node","id":"22","labels":["User"],"properties":{"name":"Adam","age":30}},
+          {"type":"relationship","id":"176","label":"LOVES","start":{"id":"21","labels":["User"],"properties":{"name":"Eve"}},"end":{"id":"22","labels":["User"],"properties":{"name":"Adam","age":30}}},
+          {"type":"relationship","id":"177","label":"KNOWS","properties":{"intensity":"eternal","since":1976},"start":{"id":"21","labels":["User"],"properties":{"name":"Eve"}},"end":{"id":"22","labels":["User"],"properties":{"name":"Adam","age":30}}}
+         ]
     '''
 
-    # The order of the relationships appears to vary randomly: also cover the reverse the lines for "LOVES" and "KNOWS"
-    # (TODO: it may be better to first parse the JSON string into a python entity and then assert)
-    expected_json_reversed_order = f'[{{"type":"node","id":"{node_id_eve}","labels":["User"],"properties":{{"name":"Eve"}}}},\n' \
-                    f' {{"type":"node","id":"{node_id_adam}","labels":["User"],"properties":{{"name":"Adam","age":30}}}},\n' \
-                    f' {{"id":"{rel_id_2}","type":"relationship","label":"KNOWS","properties":{{"intensity":"eternal","since":1976}},"start":{{"id":"{node_id_eve}","labels":["User"]}},"end":{{"id":"{node_id_adam}","labels":["User"]}}}},\n' \
-                    f' {{"id":"{rel_id_1}","type":"relationship","label":"LOVES","start":{{"id":"{node_id_eve}","labels":["User"]}},"end":{{"id":"{node_id_adam}","labels":["User"]}}}}\n]'
+    #print("RESULT:\n", result['data'])
+    #print("\nEXPECTED:\n", expected_json)
+    assert (result['data'] == expected_json)
 
-    assert (result['data'] == expected_json) or (result['data'] == expected_json_reversed_order)
+    # The order of the relationships at times varied randomly: also cover the reverse the lines for "LOVES" and "KNOWS"
+    # (TODO: it may be better to first parse the JSON string into a python entity and then assert)
+
 
 
     # Only request the "KNOWS" relationship
@@ -268,18 +302,20 @@ def test_export_nodes_rels_json(db):    # TODO: this test intermittently fails, 
     assert result['properties'] == 5
     expected_json = f'[{{"type":"node","id":"{node_id_eve}","labels":["User"],"properties":{{"name":"Eve"}}}},\n' \
                     f' {{"type":"node","id":"{node_id_adam}","labels":["User"],"properties":{{"name":"Adam","age":30}}}},\n' \
-                    f' {{"id":"{rel_id_2}","type":"relationship","label":"KNOWS","properties":{{"intensity":"eternal","since":1976}},"start":{{"id":"{node_id_eve}","labels":["User"]}},"end":{{"id":"{node_id_adam}","labels":["User"]}}}}\n]'
+                    f' {{"type":"relationship","id":"{rel_id_2}","label":"KNOWS","properties":{{"intensity":"eternal","since":1976}},"start":{{"id":"{node_id_eve}","labels":["User"],"properties":{{"name":"Eve"}}}},"end":{{"id":"{node_id_adam}","labels":["User"],"properties":{{"name":"Adam","age":30}}}}}}\n]'
     ''' EXAMPLE of JSON string:
-        [{"type":"node","id":"124","labels":["User"],"properties":{"name":"Eve"}},
-         {"type":"node","id":"125","labels":["User"],"properties":{"name":"Adam","age":30}},
-         {"id":"12","type":"relationship","label":"KNOWS","properties":{"intensity":"eternal","since":1976},"start":{"id":"124","labels":["User"]},"end":{"id":"125","labels":["User"]}}
+        [{"type":"node","id":"29","labels":["User"],"properties":{"name":"Eve"}},
+         {"type":"node","id":"30","labels":["User"],"properties":{"name":"Adam","age":30}},
+         {"type":"relationship","id":"185","label":"KNOWS","properties":{"intensity":"eternal","since":1976},"start":{"id":"29","labels":["User"],"properties":{"name":"Eve"}},"end":{"id":"30","labels":["User"],"properties":{"name":"Adam","age":30}}}
         ]
     '''
+    #print("RESULT:\n", result['data'])
+    #print("\nEXPECTED:\n", expected_json)
     assert result['data'] == expected_json
 
 
 
-def test_import_json_data(db):  # TODO: this test intermittently fails, due an assert issue involving order in a JSON string
+def test_import_json_data(db):
 
     # Check various malformed JSON data dumps
     with pytest.raises(Exception):
