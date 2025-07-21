@@ -196,11 +196,13 @@ class CypherMatch:
 
         """
         IMPORTANT:  By our convention -
-                if internal_id is provided, all other conditions are DISREGARDED;
-                if it's missing, an implicit AND operation applies to all the specified conditions
+                1) if internal_id is provided, all other conditions are DISREGARDED;
+                2) if it's missing, an implicit "AND" operation applies to all the specified conditions
+                
+                TODO: maybe ditch (1) and give an option to what boolean to use in (2)
         """
-        if node_specs.internal_id is not None:     # If an internal node ID is specified, it over-rides all the other conditions
-                                        # CAUTION: internal_id might be 0 ; that's a valid Neo4j node ID
+        if node_specs.internal_id is not None:  # If an internal node ID is specified, it over-rides all the other conditions
+                                                # CAUTION: internal_id might be 0 ; that's a valid Neo4j node ID
             cypher_match = f"({dummy_node_name})"
             cypher_where = f"id({dummy_node_name}) = {node_specs.internal_id}"
             self.node = cypher_match
