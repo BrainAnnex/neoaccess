@@ -26,7 +26,7 @@ import neo4j.time
 @pytest.fixture(scope="module")
 def db():
     # MAKE SURE TO FIRST SET THE ENVIRONMENT VARIABLES, prior to run the pytests in this file!
-    neo_obj = neo_access.NeoAccess(debug=False)     # Change the debug option to True if desired
+    neo_obj = neo_access.NeoAccess(debug=False, apoc=True)     # Change the debug option to True if desired
     yield neo_obj
 
 
@@ -57,7 +57,7 @@ def test_construction():
     obj1 = neo_access.NeoAccess(url, debug=False)       # Rely on default username/pass
 
     assert obj1.debug is False
-    assert obj1.version() == "4.4.11"    # Test the version of the Neo4j driver (this ought to match the value in requirements.txt)
+    assert obj1.version() == "5.28.1"    # Test the version of the Neo4j driver (this ought to match the value in requirements.txt)
 
 
     # Another way of instantiating the class
@@ -91,7 +91,7 @@ def test_version(db):
 ###  ~ RUNNING GENERIC QUERIES ~
 
 def test_query(db):
-    db.empty_dbase(drop_indexes=True, drop_constraints=True)
+    db.empty_dbase()
     q = "CREATE (:car {make:'Toyota', color:'white'})"   # Create a node without returning it
     result = db.query(q)
     assert result == []
@@ -140,7 +140,7 @@ def test_query(db):
 def test_query_2(db):
     # Explore the "single_row" and "single_cell" arguments of query()
 
-    db.empty_dbase(drop_indexes=True, drop_constraints=True)
+    db.empty_dbase()
 
     q = "MATCH (n) RETURN n"    # Query to locate all nodes
 
@@ -190,7 +190,7 @@ def test_query_2(db):
 
 
 def test_query_extended(db):
-    db.empty_dbase(drop_indexes=True, drop_constraints=True)
+    db.empty_dbase()
 
     # Create and return 1st node
     q = "CREATE (n:car {make:'Toyota', color:'white'}) RETURN n"
@@ -318,7 +318,7 @@ def test_update_query(db):
 ###  ~ RETRIEVE DATA ~
 
 def test_get_single_field(db):
-    db.empty_dbase(drop_indexes=True, drop_constraints=True)
+    db.empty_dbase()
     # Create 2 nodes
     db.query('''CREATE (:`my label`:`color` {`field A`: 123, `field B`: 'test'}), 
                        (:`my label`:`make`  {                `field B`: 'more test', `field C`: 3.14})
@@ -344,7 +344,7 @@ def test_get_single_field(db):
 
 
 def test_get_record_by_primary_key(db):
-    db.empty_dbase(drop_indexes=True, drop_constraints=True)
+    db.empty_dbase()
 
     node_id_Valerie = db.create_node("person", {'SSN': 123, 'name': 'Valerie', 'gender': 'F'})
     db.create_node("person", {'SSN': 456, 'name': 'Therese', 'gender': 'F'})
@@ -408,7 +408,7 @@ def test_exists_by_internal_id(db):
 
 
 def test_get_nodes(db):
-    db.empty_dbase(drop_indexes=True, drop_constraints=True)
+    db.empty_dbase()
 
     # Create a 1st new node
     db.create_node("test_label", {'patient_id': 123, 'gender': 'M'})
@@ -520,7 +520,7 @@ def test_get_nodes(db):
 
     # Now, do a clean start, and investigate a list of nodes that differ in attributes (i.e. nodes that have different lists of keys)
 
-    db.empty_dbase(drop_indexes=True, drop_constraints=True)
+    db.empty_dbase()
 
     # Create a first node, with attributes 'age' and 'gender'
     db.create_node("patient", {'age': 16, 'gender': 'F'})
@@ -558,7 +558,7 @@ def test_get_nodes(db):
 
 
 def test_get_df(db):
-    db.empty_dbase(drop_indexes=True, drop_constraints=True)
+    db.empty_dbase()
 
     # Create and load a test Pandas dataframe with 2 columns and 2 rows
     df_original = pd.DataFrame({"patient_id": [1, 2], "name": ["Jack", "Jill"]})
@@ -599,7 +599,7 @@ def test_get_node_labels(db):
 ###  ~ FOLLOW LINKS ~
 
 def test_follow_links(db):
-    db.empty_dbase(drop_indexes=True, drop_constraints=True)
+    db.empty_dbase()
 
     db.create_node("book", {'title': 'The Double Helix'})
     db.create_node("book", {'title': 'Intro to Hilbert Spaces'})
@@ -651,7 +651,7 @@ def test_count_links(db):
 
 
 def test_get_parents_and_children(db):
-    db.empty_dbase(drop_indexes=True, drop_constraints=True)
+    db.empty_dbase()
 
     node_id = db.create_node("mid generation", {'age': 42, 'gender': 'F'})    # This will be the "central node"
     result = db.get_parents_and_children(node_id)
@@ -813,7 +813,7 @@ def test_create_node(db):
                     3) retrieve the newly created nodes, using retrieve_nodes_by_label_and_clause()
     """
 
-    db.empty_dbase(drop_indexes=True, drop_constraints=True)
+    db.empty_dbase()
 
     # Create a new node.  Notice the blank in the key
     db.create_node("test_label", {'patient id': 123, 'gender': 'M'})
@@ -881,7 +881,7 @@ def test_create_node(db):
 
 
 def test_create_node_with_relationships(db):
-    db.empty_dbase(drop_indexes=True, drop_constraints=True)
+    db.empty_dbase()
 
     # Create the prior nodes to which to link the newly-created node
     db.create_node("DEPARTMENT", {'dept_name': 'IT'})
@@ -915,7 +915,7 @@ def test_create_node_with_relationships(db):
 
 
 def test_create_attached_node(db):
-    db.empty_dbase(drop_indexes=True, drop_constraints=True)
+    db.empty_dbase()
 
     with pytest.raises(Exception):
         # Attempting to link to non-existing nodes
@@ -989,7 +989,7 @@ def test_create_attached_node(db):
 
 def test_create_node_with_links(db):
 
-    db.empty_dbase(drop_indexes=True, drop_constraints=True)
+    db.empty_dbase()
 
     with pytest.raises(Exception):
         db.create_node_with_links(labels="A", properties="Not a dictionary")
@@ -1239,7 +1239,7 @@ def test_delete_nodes_by_label(db):
 def test_empty_dbase(db):
     # Tests of completely clearing the database
 
-    db.empty_dbase(drop_indexes=True, drop_constraints=True)
+    db.empty_dbase()
     # Verify nothing is left
     labels = db.get_labels()
     assert labels == []
@@ -1247,14 +1247,14 @@ def test_empty_dbase(db):
     db.create_node("label_A", {})
     db.create_node("label_B", {'client_id': 123, 'gender': 'M'})
 
-    db.empty_dbase(drop_indexes=True, drop_constraints=True)
+    db.empty_dbase()
     # Verify nothing is left
     labels = db.get_labels()
     assert labels == []
 
     # Test of removing only specific labels
 
-    db.empty_dbase(drop_indexes=True, drop_constraints=True)
+    db.empty_dbase()
     # Add a few labels
     db.create_node("label_1", {'client_id': 123, 'gender': 'M'})
     db.create_node("label_2", {})
@@ -1268,7 +1268,7 @@ def test_empty_dbase(db):
 
     # Test of keeping only specific labels
 
-    db.empty_dbase(drop_indexes=True, drop_constraints=True)
+    db.empty_dbase()
     # Add a few labels
     db.create_node("label_1", {'client_id': 123, 'gender': 'M'})
     db.create_node("label_2", {})
@@ -1290,7 +1290,7 @@ def test_empty_dbase(db):
 ###  ~ MODIFY FIELDS ~
 
 def test_set_fields(db):
-    db.empty_dbase(drop_indexes=True, drop_constraints=True)
+    db.empty_dbase()
 
     # Create a new node.  Notice the blank in the key
     db.create_node("car", {'vehicle id': 123, 'price': 7500})
@@ -1311,7 +1311,7 @@ def test_set_fields(db):
 ###  ~ RELATIONSHIPS ~
 
 def test_get_relationship_types(db):
-    db.empty_dbase(drop_indexes=True, drop_constraints=True)
+    db.empty_dbase()
     rels = db.get_relationship_types()
     assert rels == []
 
@@ -1327,7 +1327,7 @@ def test_get_relationship_types(db):
 
 
 def test_add_links(db):
-    db.empty_dbase(drop_indexes=True, drop_constraints=True)
+    db.empty_dbase()
 
     neo_from = db.create_node("car", {'color': 'white'})
     neo_to = db.create_node("owner", {'name': 'Julian'})
@@ -1344,7 +1344,7 @@ def test_add_links(db):
 
 
     # Start over again
-    db.empty_dbase(drop_indexes=True, drop_constraints=True)
+    db.empty_dbase()
 
     neo_from = db.create_node("car", {'color': 'white'})
     neo_to = db.create_node("owner", {'name': 'Julian'})
@@ -1362,7 +1362,7 @@ def test_add_links(db):
 
 
     # Start over again
-    db.empty_dbase(drop_indexes=True, drop_constraints=True)
+    db.empty_dbase()
 
     neo_from = db.create_node("car", {'color': 'white'})
     neo_to = db.create_node("owner", {'name': 'Julian'})
@@ -1391,7 +1391,7 @@ def test_add_links(db):
 
 
 def test_add_links_fast(db):
-    db.empty_dbase(drop_indexes=True, drop_constraints=True)
+    db.empty_dbase()
 
     neo_from = db.create_node("car", {'color': 'white'})
     neo_to = db.create_node("owner", {'name': 'Julian'})
@@ -1418,7 +1418,7 @@ def test_add_links_fast(db):
 
 
 def test_remove_edges(db):
-    db.empty_dbase(drop_indexes=True, drop_constraints=True)
+    db.empty_dbase()
 
     neo_car = db.create_node("car", {'color': 'white'})
     neo_julian = db.create_node("owner", {'name': 'Julian'})
@@ -1564,7 +1564,7 @@ def test_remove_edges(db):
 
 def test_remove_edges_2(db):
     # This set of test focuses on removing edges between GROUPS of nodes
-    db.empty_dbase(drop_indexes=True, drop_constraints=True)
+    db.empty_dbase()
 
     # 2 cars, co-owned by 2 people
     q = '''
@@ -1601,7 +1601,7 @@ def test_remove_edges_2(db):
 
 
 def test_edges_exists(db):
-    db.empty_dbase(drop_indexes=True, drop_constraints=True)
+    db.empty_dbase()
 
     neo_car = db.create_node("car", {'color': 'white'})
     neo_julian = db.create_node("owner", {'name': 'Julian'})
@@ -1633,7 +1633,7 @@ def test_edges_exists(db):
 
 
 def test_number_of_links(db):
-    db.empty_dbase(drop_indexes=True, drop_constraints=True)
+    db.empty_dbase()
 
     neo_car = db.create_node("car", {'color': 'white'})
     neo_julian = db.create_node("owner", {'name': 'Julian'})
@@ -1754,7 +1754,7 @@ def test_reattach_node(db):
 
 
 def test_link_nodes_by_ids(db):
-    db.empty_dbase(drop_indexes=True, drop_constraints=True)
+    db.empty_dbase()
     # Create dummy data and return node_ids
     nodeids = db.query("""
         UNWIND range(1,3) as x
@@ -1777,7 +1777,7 @@ def test_link_nodes_by_ids(db):
 
 
 def test_link_nodes_on_matching_property(db):
-    db.empty_dbase(drop_indexes=True, drop_constraints=True)
+    db.empty_dbase()
     db.create_node('A', {'client': 'GSK', 'expenses': 34000, 'duration': 3})
     db.create_node('B', {'client': 'Roche'})
     db.create_node('C', {'client': 'GSK'})
@@ -1808,7 +1808,7 @@ def test_get_labels(db):
     Create multiple new nodes, and then retrieve all the labels present in the database
     """
 
-    db.empty_dbase(drop_indexes=True, drop_constraints=True)
+    db.empty_dbase(keep_labels=None)
 
     labels = db.get_labels()
     assert labels == []
@@ -1816,27 +1816,30 @@ def test_get_labels(db):
     # Create a series of new nodes with different labels
     # and then check the cumulative list of labels added to the dbase thus far
 
-    db.create_node("mercury", {'position': 1})
+    db.create_node(labels="mercury", properties={'position': 1})
     labels = db.get_labels()
     assert labels == ["mercury"]
 
-    db.create_node("venus", {'radius': 1234.5})
+    db.create_node(labels="venus", properties={'radius': 1234.5})
     labels = db.get_labels()
-    assert compare_unordered_lists(labels , ["mercury", "venus"])
-
-    db.create_node("earth", {'mass': 9999.9 , 'radius': 1234.5})
+    assert compare_unordered_lists(labels , ["mercury", "venus"]) # The expected list may be
+                                                                  # specified in any order
+    db.create_node(labels="earth", properties={'mass': 9999.9 , 'radius': 1234.5})
     labels = db.get_labels()
-    assert compare_unordered_lists(labels , ["mercury", "earth", "venus"]) # The expected list may be
-                                                                            # specified in any order
+    assert compare_unordered_lists(labels , ["mercury", "earth", "venus"])
 
-    db.create_node("mars", {})
+    db.create_node(labels="mars", properties={})
     labels = db.get_labels()
     assert compare_unordered_lists(labels , ["mars", "earth", "mercury","venus"])
+
+    db.create_node(labels=["jupiter", "planet"], properties={})
+    labels = db.get_labels()
+    assert compare_unordered_lists(labels , ["mars", "earth", "mercury","venus", "jupiter", "planet"])
 
 
 
 def test_get_label_properties(db):
-    db.empty_dbase(drop_indexes=True, drop_constraints=True)
+    db.empty_dbase()
     db.query("CREATE (a1 :A {y:123}), (a2 :A {x:'hello'}), (a3 :A {`some name with blanks`:'x'}), (b :B {e:1})")
     result = db.get_label_properties(label = 'A')
     expected_result = ['some name with blanks', 'x', 'y']
@@ -1853,27 +1856,32 @@ def test_get_indexes(db):
     result = db.get_indexes()
     assert result.empty
 
+    # Directly create an index
     db.query("CREATE INDEX FOR (n:my_label) ON (n.my_property)")
     result = db.get_indexes()
     assert result.iloc[0]["labelsOrTypes"] == ["my_label"]
     assert result.iloc[0]["properties"] == ["my_property"]
-    assert result.iloc[0]["type"] == "BTREE"
-    assert result.iloc[0]["uniqueness"] == "NONUNIQUE"
+    assert result.iloc[0]["entityType"] == "NODE"
 
-    db.query("CREATE CONSTRAINT some_name ON (n:my_label) ASSERT n.node_id IS UNIQUE")
+    # Indirectly create a 2nd index
+    db.query("CREATE CONSTRAINT some_name IF NOT EXISTS FOR (n:my_label) REQUIRE n.node_id IS UNIQUE")
     result = db.get_indexes()
-    new_row = dict(result.iloc[1])
-    assert new_row == {"labelsOrTypes": ["my_label"],
-                       "name": "some_name",
-                       "properties": ["node_id"],
-                       "type": "BTREE",
-                       "uniqueness": "UNIQUE"
-                      }
+
+    # The earlier index is still there
+    assert result.iloc[0]["labelsOrTypes"] == ["my_label"]
+    assert result.iloc[0]["properties"] == ["my_property"]
+    assert result.iloc[0]["entityType"] == "NODE"
+
+    # The new index
+    assert result.iloc[1]["name"] == "some_name"
+    assert result.iloc[1]["labelsOrTypes"] == ["my_label"]
+    assert result.iloc[1]["properties"] == ["node_id"]
+    assert result.iloc[1]["entityType"] == "NODE"
 
 
 
 def test_create_index(db):
-    db.empty_dbase(drop_indexes=True, drop_constraints=True)
+    db.empty_dbase()
 
     status = db.create_index(label="car", key="color")
     assert status == True
@@ -1903,7 +1911,7 @@ def test_create_index(db):
 
 
 def test_drop_index(db):
-    db.empty_dbase(drop_indexes=True, drop_constraints=True)
+    db.empty_dbase()
 
     db.create_index("car", "color")
     db.create_index("car", "make")
@@ -1925,7 +1933,7 @@ def test_drop_index(db):
 
 
 def test_drop_all_indexes(db):
-    db.empty_dbase(drop_indexes=True, drop_constraints=True)
+    db.empty_dbase()
 
     db.create_index("car", "color")
     db.create_index("car", "make")
@@ -1945,7 +1953,7 @@ def test_drop_all_indexes(db):
 ###  ~ CONSTRAINTS ~
 
 def test_get_constraints(db):
-    db.empty_dbase(drop_indexes=True, drop_constraints=True)
+    db.empty_dbase()
 
     result = db.get_constraints()
     assert result.empty
@@ -1967,7 +1975,7 @@ def test_get_constraints(db):
 
 
 def test_create_constraint(db):
-    db.empty_dbase(drop_indexes=True, drop_constraints=True)
+    db.empty_dbase()
 
     status = db.create_constraint("patient", "patient_id", name="my_first_constraint")
     assert status == True
@@ -2004,7 +2012,7 @@ def test_create_constraint(db):
 
 
 def test_drop_constraint(db):
-    db.empty_dbase(drop_indexes=True, drop_constraints=True)
+    db.empty_dbase()
 
     db.create_constraint("patient", "patient_id", name="constraint1")
     db.create_constraint("client", "client_id")
@@ -2030,7 +2038,7 @@ def test_drop_constraint(db):
 
 
 def test_drop_all_constraints(db):
-    db.empty_dbase(drop_indexes=True, drop_constraints=True)
+    db.empty_dbase()
 
     db.create_constraint("patient", "patient_id", name="constraint1")
     db.create_constraint("client", "client_id")
@@ -2049,7 +2057,7 @@ def test_drop_all_constraints(db):
 ###  ~ READ IN DATA from PANDAS ~
 
 def test_load_pandas_1(db):
-    db.empty_dbase(drop_indexes=True, drop_constraints=True)
+    db.empty_dbase()
 
     # Start with a single imported node
     df = pd.DataFrame([[123]], columns = ["col1"])  # One row, one column
@@ -2111,7 +2119,7 @@ def test_load_pandas_1(db):
 
 
 def test_load_pandas_2(db):
-    db.empty_dbase(drop_indexes=True, drop_constraints=True)
+    db.empty_dbase()
 
     # Add 3 records
     df = pd.DataFrame({"scientist_id": [10, 20, 30], "name": ["Julian", "Jack", "Jill"], "location": ["CA", "NY", "DC"]})
@@ -2201,7 +2209,7 @@ def test_load_pandas_2(db):
 
 
 def test_load_pandas_3(db):
-    db.empty_dbase(drop_indexes=True, drop_constraints=True)
+    db.empty_dbase()
 
     # First group on nodes to import
     ages = np.array([13, 25, 19, 99])
@@ -2240,7 +2248,7 @@ def test_load_pandas_3(db):
 
 def test_load_pandas_4(db):
     # Test numeric columns
-    db.empty_dbase(drop_indexes=True, drop_constraints=True)
+    db.empty_dbase()
 
     # First group on nodes to import, with option to ignore NaN's
     df = pd.DataFrame({"name": ["pot", "pan", "microwave"], "price": [12, np.nan, 55]})
@@ -2266,7 +2274,7 @@ def test_load_pandas_4(db):
 
 def test_load_pandas_4b(db):
     # More tests of numeric columns
-    db.empty_dbase(drop_indexes=True, drop_constraints=True)
+    db.empty_dbase()
 
     # Test with nans and ignore_nan = True
     df = pd.DataFrame({"name": ["Bob", "Tom"], "col1": [26, None], "col2": [1.1, None]})
@@ -2290,7 +2298,7 @@ def test_load_pandas_4b(db):
 
 def test_load_pandas_4c(db):
     # Attempt to merge using columns with NULL values
-    db.empty_dbase(drop_indexes=True, drop_constraints=True)
+    db.empty_dbase()
 
     # Attempt to merge using columns with NULL values
     df = pd.DataFrame({"name": ["Bob", "Tom"], "col1": [26, None], "col2": [1.1, None]})
@@ -2304,7 +2312,7 @@ def test_load_pandas_4c(db):
 
 
 def test_load_pandas_5(db):
-    db.empty_dbase(drop_indexes=True, drop_constraints=True)
+    db.empty_dbase()
 
     # First group on 5 nodes to import
     df = pd.DataFrame({"name": ["A", "B", "C", "D", "E"], "price": [1, 2, 3, 4, 5]})
@@ -2333,7 +2341,7 @@ def test_load_pandas_5(db):
 
 def test_load_pandas_6(db):
     # Test times/dates
-    db.empty_dbase(drop_indexes=True, drop_constraints=True)
+    db.empty_dbase()
 
     # Dataframe with group of dates, turned into a datetime column
     df = pd.DataFrame({"name": ["A", "B", "C"], "arrival date": ["2020-01-01", "2020-01-11", "2020-01-21"]})
@@ -2348,7 +2356,7 @@ def test_load_pandas_6(db):
 
 def test_load_pandas_7(db):
     # More tests of times/dates
-    db.empty_dbase(drop_indexes=True, drop_constraints=True)
+    db.empty_dbase()
 
     df = pd.DataFrame([[datetime(2019, 6, 1, 18, 40, 32, 0), date(2019, 6, 1)]], columns=["dtm", "dt"])
     db.load_pandas(df, labels="MYTEST")
@@ -2359,7 +2367,7 @@ def test_load_pandas_7(db):
 
 def test_load_pandas_8(db):
     # More tests of times/dates
-    db.empty_dbase(drop_indexes=True, drop_constraints=True)
+    db.empty_dbase()
 
     input_df = pd.DataFrame({
         'int_values': [2, 1, 3, 4],

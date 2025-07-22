@@ -97,7 +97,7 @@ class NeoAccessCore:
                                 DEFAULT: read from NEO4J_USER and NEO4J_PASSWORD environmental variables
         :param apoc:        Flag indicating whether apoc library is used on Neo4j database to connect to
                                 Notes: APOC, if used, must also be enabled on the database.
-                                The only method currently requiring APOC is export_dbase_json()
+
         :param debug:       Flag indicating whether a debug mode is to be used :
                                 if True, all the Cypher queries, and some additional info, will get printed
         :param autoconnect  Flag indicating whether the class should establish connection to database at initialization
@@ -2413,8 +2413,7 @@ class NeoAccess(NeoAccessCore):
 
         :return:    A list of strings
         """
-        #TODO: test when there are nodes that have multiple labels
-        results = self.query("call db.labels() yield label return label")
+        results = self.query("MATCH (n) UNWIND labels(n) As label RETURN DISTINCT label")
         return [x['label'] for x in results]
 
 
@@ -2456,23 +2455,23 @@ class NeoAccess(NeoAccessCore):
         as a Pandas dataframe.
 
         EXAMPLE:
-                 labelsOrTypes              name          properties    type  uniqueness
-             0    ["my_label"]  "index_23b59623"     ["my_property"]   BTREE   NONUNIQUE
-             1    ["L"]            "L.client_id"       ["client_id"]   BTREE      UNIQUE
+                               name  labelsOrTypes        properties      entityType     type
+             0      "index_23b59623"  ["my_label"]   ["my_property"]            NODE    BTREE
+             1         "L.client_id"         ["L"]     ["client_id"]    RELATIONSHIP    BTREE
 
         :return:        A (possibly-empty) Pandas dataframe
         """
 
-        q = f"""
-          CALL db.indexes() 
-          YIELD name, labelsOrTypes, properties, type, uniqueness
-          return *
-          """
+        q = """
+            SHOW INDEXES 
+            YIELD name, labelsOrTypes, properties, entityType, type
+            return *
+            """
 
         results = self.query(q)
         if len(results) > 0:
             return pd.DataFrame(list(results))
-        else:
+        else:    # No index found
             return pd.DataFrame([], columns=['name'])
 
 
@@ -2518,7 +2517,7 @@ class NeoAccess(NeoAccessCore):
 
 
 
-    def drop_index(self, name: str) -> bool:
+    def drop_index(self, name :str) -> bool:
         """
         Get rid of the index with the given name
 
@@ -2542,6 +2541,7 @@ class NeoAccess(NeoAccessCore):
         if including_constraints:
             if self.apoc:
                 self.query("call apoc.schema.assert({},{})")
+                return      # TODO: it may not delete all indexes!
             else:
                 self.drop_all_constraints()    # TODO: it doesn't work in version 5.5 of the Neo4j database
 
