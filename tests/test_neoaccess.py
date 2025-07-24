@@ -1881,7 +1881,7 @@ def test_get_indexes(db):
 
 
 def test_create_index(db):
-    db.empty_dbase()
+    db.empty_dbase(drop_indexes=True, drop_constraints=True)
 
     status = db.create_index(label="car", key="color")
     assert status == True
@@ -1891,8 +1891,7 @@ def test_create_index(db):
     assert result.iloc[0]["labelsOrTypes"] == ["car"]
     assert result.iloc[0]["name"] == "car.color"
     assert result.iloc[0]["properties"] == ["color"]
-    assert result.iloc[0]["type"] == "BTREE"
-    assert result.iloc[0]["uniqueness"] == "NONUNIQUE"
+
 
     status = db.create_index("car", "color")    # Attempt to create again same index
     assert status == False
@@ -1905,13 +1904,11 @@ def test_create_index(db):
     assert result.iloc[1]["labelsOrTypes"] == ["car"]
     assert result.iloc[1]["name"] == "car.make"
     assert result.iloc[1]["properties"] == ["make"]
-    assert result.iloc[1]["type"] == "BTREE"
-    assert result.iloc[1]["uniqueness"] == "NONUNIQUE"
 
 
 
 def test_drop_index(db):
-    db.empty_dbase()
+    db.empty_dbase(drop_indexes=True, drop_constraints=True)
 
     db.create_index("car", "color")
     db.create_index("car", "make")
@@ -1933,7 +1930,7 @@ def test_drop_index(db):
 
 
 def test_drop_all_indexes(db):
-    db.empty_dbase()
+    db.empty_dbase(drop_indexes=True, drop_constraints=True)
 
     db.create_index("car", "color")
     db.create_index("car", "make")
@@ -1953,58 +1950,93 @@ def test_drop_all_indexes(db):
 ###  ~ CONSTRAINTS ~
 
 def test_get_constraints(db):
-    db.empty_dbase()
+    db.empty_dbase(drop_indexes=True, drop_constraints=True)
 
     result = db.get_constraints()
     assert result.empty
 
-    db.query("CREATE CONSTRAINT my_first_constraint ON (n:patient) ASSERT n.patient_id IS UNIQUE")
+    expected_cols = ['name', 'type', 'labelsOrTypes', 'properties', 'entityType', 'ownedIndex']
+
+    # Add a constraint
+    db.query("CREATE CONSTRAINT my_first_constraint IF NOT EXISTS FOR (n:patient) REQUIRE n.patient_id IS UNIQUE")
     result = db.get_constraints()
     assert len(result) == 1
-    expected_list = ["name", "description", "details"]
-    compare_unordered_lists(list(result.columns), expected_list)
-    assert result.iloc[0]["name"] == "my_first_constraint"
 
-    db.query("CREATE CONSTRAINT unique_model ON (n:car) ASSERT n.model IS UNIQUE")
+    assert compare_unordered_lists(list(result.columns), expected_cols)
+    assert result.iloc[0]["name"] == "my_first_constraint"
+    assert result.iloc[0]["type"] == "UNIQUENESS"
+    assert result.iloc[0]["labelsOrTypes"] == ["patient"]
+    assert result.iloc[0]["entityType"] == "NODE"
+    assert result.iloc[0]["ownedIndex"] == "my_first_constraint"
+
+
+    # Add a 2nd constraint
+    db.query("CREATE CONSTRAINT unique_model IF NOT EXISTS FOR (n:car) REQUIRE n.model IS UNIQUE")
     result = db.get_constraints()
     assert len(result) == 2
-    expected_list = ["name", "description", "details"]
-    compare_unordered_lists(list(result.columns), expected_list)
+
+    assert compare_unordered_lists(list(result.columns), expected_cols)
+    # From the earlier constraint
+    assert result.iloc[0]["name"] == "my_first_constraint"
+    assert result.iloc[0]["type"] == "UNIQUENESS"
+    assert result.iloc[0]["labelsOrTypes"] == ["patient"]
+    assert result.iloc[0]["properties"] == ["patient_id"]
+    assert result.iloc[0]["entityType"] == "NODE"
+    assert result.iloc[0]["ownedIndex"] == "my_first_constraint"
+
+    # From the new constraint
     assert result.iloc[1]["name"] == "unique_model"
+    assert result.iloc[1]["type"] == "UNIQUENESS"
+    assert result.iloc[1]["labelsOrTypes"] == ["car"]
+    assert result.iloc[1]["properties"] == ["model"]
+    assert result.iloc[1]["entityType"] == "NODE"
+    assert result.iloc[1]["ownedIndex"] == "unique_model"
 
 
 
 def test_create_constraint(db):
-    db.empty_dbase()
+    db.empty_dbase(drop_indexes=True, drop_constraints=True)
 
+    # Create a 1st constraint
     status = db.create_constraint("patient", "patient_id", name="my_first_constraint")
     assert status == True
 
     result = db.get_constraints()
     assert len(result) == 1
-    expected_list = ["name", "description", "details"]
-    compare_unordered_lists(list(result.columns), expected_list)
     assert result.iloc[0]["name"] == "my_first_constraint"
+    assert result.iloc[0]["type"] == "UNIQUENESS"
+    assert result.iloc[0]["labelsOrTypes"] == ["patient"]
+    assert result.iloc[0]["properties"] == ["patient_id"]
+    assert result.iloc[0]["entityType"] == "NODE"
+    assert result.iloc[0]["ownedIndex"] == "my_first_constraint"
 
+
+    # Create a 2nd constraint
     status = db.create_constraint("car", "registration_number")
     assert status == True
 
     result = db.get_constraints()
     assert len(result) == 2
-    expected_list = ["name", "description", "details"]
-    compare_unordered_lists(list(result.columns), expected_list)
+
     cname0 = result.iloc[0]["name"]
     cname1 = result.iloc[1]["name"]
-    assert cname0 == "car.registration_number.UNIQUE" or cname1 == "car.registration_number.UNIQUE"
+    # The order isn't guaranteed
+    assert compare_unordered_lists([cname0, cname1],
+                                   ["my_first_constraint", "car.registration_number.UNIQUE"])
 
-    status = db.create_constraint("car", "registration_number")   # Attempt to create a constraint that already was in place
+
+    # Attempt to create a constraint that already was in place
+    status = db.create_constraint("car", "registration_number")
+
     assert status == False
     result = db.get_constraints()
     assert len(result) == 2
 
+
+    # Attempt to create a constraint for which there was already an index
     db.create_index("car", "parking_spot")
 
-    status = db.create_constraint("car", "parking_spot")    # Attempt to create a constraint for which there was already an index
+    status = db.create_constraint("car", "parking_spot")
     assert status == False
     result = db.get_constraints()
     assert len(result) == 2
@@ -2012,7 +2044,7 @@ def test_create_constraint(db):
 
 
 def test_drop_constraint(db):
-    db.empty_dbase()
+    db.empty_dbase(drop_indexes=True, drop_constraints=True)
 
     db.create_constraint("patient", "patient_id", name="constraint1")
     db.create_constraint("client", "client_id")
@@ -2038,7 +2070,7 @@ def test_drop_constraint(db):
 
 
 def test_drop_all_constraints(db):
-    db.empty_dbase()
+    db.empty_dbase(drop_indexes=True, drop_constraints=True)
 
     db.create_constraint("patient", "patient_id", name="constraint1")
     db.create_constraint("client", "client_id")
@@ -2057,7 +2089,7 @@ def test_drop_all_constraints(db):
 ###  ~ READ IN DATA from PANDAS ~
 
 def test_load_pandas_1(db):
-    db.empty_dbase()
+    db.empty_dbase(drop_indexes=True, drop_constraints=True)
 
     # Start with a single imported node
     df = pd.DataFrame([[123]], columns = ["col1"])  # One row, one column
@@ -2119,7 +2151,7 @@ def test_load_pandas_1(db):
 
 
 def test_load_pandas_2(db):
-    db.empty_dbase()
+    db.empty_dbase(drop_indexes=True, drop_constraints=True)
 
     # Add 3 records
     df = pd.DataFrame({"scientist_id": [10, 20, 30], "name": ["Julian", "Jack", "Jill"], "location": ["CA", "NY", "DC"]})
@@ -2161,9 +2193,14 @@ def test_load_pandas_2(db):
 
     # Verify that a database Index got created as a result of using merge_primary_key
     all_indexes = db.get_indexes()
+    print()
+    print(all_indexes)
     assert len(all_indexes) == 1
-    index_as_list = list(all_indexes.iloc[0])
-    assert index_as_list == [['scientist'], 'scientist.scientist_id', ['scientist_id'], 'BTREE', 'NONUNIQUE']
+    # Investigate the 0-th (only) index
+    assert all_indexes["name"][0] == 'scientist.scientist_id'
+    assert all_indexes["labelsOrTypes"][0] == ['scientist']
+    assert all_indexes["properties"][0] == ['scientist_id']
+    assert all_indexes["entityType"][0] == 'NODE'
 
 
     # More tests of merge with primary_key
@@ -2198,8 +2235,8 @@ def test_load_pandas_2(db):
     # There's no guarantee about the order of the Indices
     index_0 = list(all_indexes.iloc[0])
     index_1 = list(all_indexes.iloc[1])
-    expected_A = [['scientist'], 'scientist.scientist_id', ['scientist_id'], 'BTREE', 'NONUNIQUE']  # The old index
-    expected_B = [['X'], 'X.patient_id', ['patient_id'], 'BTREE', 'NONUNIQUE']                      # The newly-added index
+    expected_A = ['scientist.scientist_id', ['scientist'], ['scientist_id'], 'NODE', 'RANGE']  # The old index
+    expected_B = ['X.patient_id', ['X'], ['patient_id'], 'NODE', 'RANGE']                      # The newly-added index
 
     assert (index_0 == expected_A) or (index_0 == expected_B)
     if index_0 == expected_A:
@@ -2209,7 +2246,7 @@ def test_load_pandas_2(db):
 
 
 def test_load_pandas_3(db):
-    db.empty_dbase()
+    db.empty_dbase(drop_indexes=True, drop_constraints=True)
 
     # First group on nodes to import
     ages = np.array([13, 25, 19, 99])
@@ -2248,7 +2285,7 @@ def test_load_pandas_3(db):
 
 def test_load_pandas_4(db):
     # Test numeric columns
-    db.empty_dbase()
+    db.empty_dbase(drop_indexes=True, drop_constraints=True)
 
     # First group on nodes to import, with option to ignore NaN's
     df = pd.DataFrame({"name": ["pot", "pan", "microwave"], "price": [12, np.nan, 55]})
@@ -2274,7 +2311,7 @@ def test_load_pandas_4(db):
 
 def test_load_pandas_4b(db):
     # More tests of numeric columns
-    db.empty_dbase()
+    db.empty_dbase(drop_indexes=True, drop_constraints=True)
 
     # Test with nans and ignore_nan = True
     df = pd.DataFrame({"name": ["Bob", "Tom"], "col1": [26, None], "col2": [1.1, None]})
@@ -2298,7 +2335,7 @@ def test_load_pandas_4b(db):
 
 def test_load_pandas_4c(db):
     # Attempt to merge using columns with NULL values
-    db.empty_dbase()
+    db.empty_dbase(drop_indexes=True, drop_constraints=True)
 
     # Attempt to merge using columns with NULL values
     df = pd.DataFrame({"name": ["Bob", "Tom"], "col1": [26, None], "col2": [1.1, None]})
@@ -2312,7 +2349,7 @@ def test_load_pandas_4c(db):
 
 
 def test_load_pandas_5(db):
-    db.empty_dbase()
+    db.empty_dbase(drop_indexes=True, drop_constraints=True)
 
     # First group on 5 nodes to import
     df = pd.DataFrame({"name": ["A", "B", "C", "D", "E"], "price": [1, 2, 3, 4, 5]})
@@ -2341,7 +2378,7 @@ def test_load_pandas_5(db):
 
 def test_load_pandas_6(db):
     # Test times/dates
-    db.empty_dbase()
+    db.empty_dbase(drop_indexes=True, drop_constraints=True)
 
     # Dataframe with group of dates, turned into a datetime column
     df = pd.DataFrame({"name": ["A", "B", "C"], "arrival date": ["2020-01-01", "2020-01-11", "2020-01-21"]})
@@ -2349,14 +2386,19 @@ def test_load_pandas_6(db):
     id_list = db.load_pandas(df, labels="events")
 
     for node_id in id_list:
-        q = f'''MATCH (n :events) WHERE id(n) = {node_id} RETURN apoc.meta.type(n.`arrival date`) AS dtype'''
+        q = f'''
+            MATCH (n :events) 
+            WHERE id(n) = {node_id} 
+            RETURN apoc.meta.cypher.type(n.`arrival date`) AS dtype
+            '''
+
         res = db.query(q, single_cell="dtype")
-        assert res == "LocalDateTime"
+        assert res == "LOCAL_DATE_TIME"
 
 
 def test_load_pandas_7(db):
     # More tests of times/dates
-    db.empty_dbase()
+    db.empty_dbase(drop_indexes=True, drop_constraints=True)
 
     df = pd.DataFrame([[datetime(2019, 6, 1, 18, 40, 32, 0), date(2019, 6, 1)]], columns=["dtm", "dt"])
     db.load_pandas(df, labels="MYTEST")
@@ -2367,7 +2409,7 @@ def test_load_pandas_7(db):
 
 def test_load_pandas_8(db):
     # More tests of times/dates
-    db.empty_dbase()
+    db.empty_dbase(drop_indexes=True, drop_constraints=True)
 
     input_df = pd.DataFrame({
         'int_values': [2, 1, 3, 4],

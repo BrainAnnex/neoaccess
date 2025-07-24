@@ -44,13 +44,22 @@ def test_export_dbase_json(db):
     assert result['nodes'] == 2
     assert result['relationships'] == 0
     assert result['properties'] == 3
+    actual_json = result['data']
     expected_json = f'[{{"type":"node","id":"{node_id_eve}","labels":["User"],"properties":{{"name":"Eve"}}}},\n {{"type":"node","id":"{node_id_adam}","labels":["User"],"properties":{{"name":"Adam","age":30}}}}\n]'
-    assert result['data'] == expected_json
     ''' EXAMPLE of JSON string:
                 [{"type":"node","id":"100","labels":["User"],"properties":{"name":"Eve"}},
                  {"type":"node","id":"101","labels":["User"],"properties":{"name":"Adam","age":30}}
                 ]
     '''
+    # We cannot directly compare the JSON strings because the nodes might be returned in different order;
+    # if directly compared, this test intermittently fails!
+    # We need to first parse the JSON strings into a python entities and then assert
+    actual_json_data = json.loads(actual_json)
+    expected_json_data = json.loads(expected_json)
+    #print("\nACTUAL RESULT:\n", actual_json_data)
+    #print("\nEXPECTED:\n", expected_json_data)
+    assert compare_recordsets(actual_json_data, expected_json_data)
+
 
     # Now add relationship (with no properties) between the above two nodes
     db.link_nodes_by_ids(node_id_eve, node_id_adam, "LOVES")
@@ -75,7 +84,6 @@ def test_export_dbase_json(db):
                 {"type":"relationship","id":"8","label":"LOVES","start":{"id":"21","labels":["User"],"properties":{"name":"Eve"}},"end":{"id":"22","labels":["User"],"properties":{"name":"Adam","age":30}}}
             ]
     '''
-
     # We cannot directly compare the JSON strings because the nodes might be returned in different order;
     # if directly compared, this test intermittently fails!
     # We need to first parse the JSON strings into a python entities and then assert
@@ -274,6 +282,8 @@ def test_export_nodes_rels_json(db):
     assert result['nodes'] == 2
     assert result['relationships'] == 2
     assert result['properties'] == 5    # Note that the 2 properties in the latest relationship went into the count
+
+    actual_json = result['data']
     expected_json = f'[{{"type":"node","id":"{node_id_eve}","labels":["User"],"properties":{{"name":"Eve"}}}},\n' \
                     f' {{"type":"node","id":"{node_id_adam}","labels":["User"],"properties":{{"name":"Adam","age":30}}}},\n' \
                     f' {{"type":"relationship","id":"{rel_id_1}","label":"LOVES","start":{{"id":"{node_id_eve}","labels":["User"],"properties":{{"name":"Eve"}}}},"end":{{"id":"{node_id_adam}","labels":["User"],"properties":{{"name":"Adam","age":30}}}}}},\n' \
@@ -286,13 +296,14 @@ def test_export_nodes_rels_json(db):
          ]
     '''
 
-    #print("RESULT:\n", result['data'])
-    #print("\nEXPECTED:\n", expected_json)
-    assert (result['data'] == expected_json)
-
-    # The order of the relationships at times varied randomly: also cover the reverse the lines for "LOVES" and "KNOWS"
-    # (TODO: it may be better to first parse the JSON string into a python entity and then assert)
-
+    # We cannot directly compare the JSON strings because the nodes might be returned in different order;
+    # if directly compared, this test intermittently fails!
+    # We need to first parse the JSON strings into a python entities and then assert
+    actual_json_data = json.loads(actual_json)
+    expected_json_data = json.loads(expected_json)
+    #print("\nACTUAL RESULT:\n", actual_json_data)
+    #print("\nEXPECTED:\n", expected_json_data)
+    assert compare_recordsets(actual_json_data, expected_json_data)
 
 
     # Only request the "KNOWS" relationship

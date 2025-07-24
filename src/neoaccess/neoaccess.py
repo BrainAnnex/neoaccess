@@ -2456,8 +2456,8 @@ class NeoAccess(NeoAccessCore):
 
         EXAMPLE:
                                name  labelsOrTypes        properties      entityType     type
-             0      "index_23b59623"  ["my_label"]   ["my_property"]            NODE    BTREE
-             1         "L.client_id"         ["L"]     ["client_id"]    RELATIONSHIP    BTREE
+             0      "index_23b59623"  ["my_label"]   ["my_property"]            NODE    RANGE
+             1         "L.client_id"         ["L"]     ["client_id"]    RELATIONSHIP    RANGE
 
         :return:        A (possibly-empty) Pandas dataframe
         """
@@ -2565,58 +2565,63 @@ class NeoAccess(NeoAccessCore):
         """
         Return all the database constraints, and some of their attributes,
         as a Pandas dataframe with 3 columns:
-            name        EXAMPLE: "my_constraint"
-            description EXAMPLE: "CONSTRAINT ON ( patient:patient ) ASSERT (patient.patient_id) IS UNIQUE"
-            details     EXAMPLE: "Constraint( id=3, name='my_constraint', type='UNIQUENESS',
-                                  schema=(:patient {patient_id}), ownedIndex=12 )"
+            COLUMN          EXAMPLES
+            name            "my_constraint"
+            type            "UNIQUENESS"
+            labelsOrTypes   ["patient"]
+            properties      ["patient_id"]
+            entityType      "NODE"
+            ownedIndexId    3    or  "my_constraint"
 
         :return:  A (possibly-empty) Pandas dataframe with 3 columns: 'name', 'description', 'details'
         """
-        # TODO: it doesn't work in version 5.5 of the database
-        # TODO: provide a more friendly display output (long field values aren't handled well in Pandas displays)
         q = """
-           call db.constraints() 
-           yield name, description, details
+           SHOW CONSTRAINTS
+           yield name, type, labelsOrTypes, properties, entityType, ownedIndex
            return *
            """
         results = self.query(q)
         if len(results) > 0:
             return pd.DataFrame(list(results))
         else:
-            return pd.DataFrame([], columns=['name', 'description', 'details'])
+            return pd.DataFrame([], columns=['name', 'type', 'labelsOrTypes', 'properties', 'entityType', 'ownedIndex'])
 
 
 
-    def create_constraint(self, label: str, key: str, type="UNIQUE", name=None) -> bool:
+    def create_constraint(self, label: str, key: str, name=None) -> bool:
         """
         Create a uniqueness constraint for a node property in the graph,
-        unless a constraint with the standard name of the form `{label}.{key}.{type}` is already present
+        unless a constraint with the standard name of the form `{label}.{key}.UNIQUE` is already present
         Note: it also creates an index, and cannot be applied if an index already exists.
         EXAMPLE: create_constraint("patient", "patient_id")
+
         :param label:   A string with the node label to which the constraint is to be applied
         :param key:     A string with the key (property) name to which the constraint is to be applied
-        :param type:    For now, the default "UNIQUE" is the only allowed option
         :param name:    Optional name to give to the new constraint; if not provided, a
-                            standard name of the form `{label}.{key}.{type}` is used.  EXAMPLE: "patient.patient_id.UNIQUE"
+                            standard name of the form `{label}.{key}.UNIQUE` is used.
+                            EXAMPLE: "patient.patient_id.UNIQUE"
         :return:        True if a new constraint was created, or False otherwise
         """
-        assert type == "UNIQUE"
-        #TODO: consider other types of constraints
+        #TODO: possibly consider other types of constraints
 
         existing_constraints = self.get_constraints()
-        # constraint is created if not already exists.
-        # a standard name for a constraint is assigned: `{label}.{key}.{type}` if name was not provided
-        cname = (name if name else f"`{label}.{key}.{type}`")
+        # Constraint is created if not already exists.
+        # a standard name for a constraint is assigned: `{label}.{key}.UNIQUE` if name was not provided
+        cname = (name if name else f"{label}.{key}.UNIQUE")
         if cname in list(existing_constraints['name']):
+            print("--- ALREADY EXISTS")
             return False
 
         try:
-            q = f'CREATE CONSTRAINT {cname} ON (s:`{label}`) ASSERT s.`{key}` IS UNIQUE'
+            q = f'''
+                CREATE CONSTRAINT `{cname}` IF NOT EXISTS FOR (n:`{label}`) REQUIRE n.`{key}` IS UNIQUE
+                '''
             self.query(q)
             # Note: creation of a constraint will crash if another constraint, or index, already exists
             #           for the specified label and key
             return True
         except Exception:
+            #print("Exception triggered")
             return False
 
 
