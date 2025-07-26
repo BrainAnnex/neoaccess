@@ -2522,10 +2522,11 @@ class NeoAccess(NeoAccessCore):
         Get rid of the index with the given name
 
         :param name:    Name of the index to jettison
-        :return:        True if successful or False otherwise (for example, if the index doesn't exist)
+        :return:        True if successful
+                            or False otherwise (for example, if the index doesn't exist)
         """
         try:
-            self.query(f"DROP INDEX `{name}`")      # Note: this crashes if the index doesn't exist
+            self.query(f"DROP INDEX `{name}`")      # Note: this generates an Exception if the index doesn't exist
             return True
         except Exception:
             return False
@@ -2539,11 +2540,12 @@ class NeoAccess(NeoAccessCore):
         :return:                        None
         """
         if including_constraints:
-            if self.apoc:
-                self.query("call apoc.schema.assert({},{})")
-                return      # TODO: it may not delete all indexes!
-            else:
-                self.drop_all_constraints()    # TODO: it doesn't work in version 5.5 of the Neo4j database
+            #if self.apoc:
+                #self.query("call apoc.schema.assert({},{})")
+                #return      # DEPRECATED: it may not delete all indexes!
+            #else:
+            self.drop_all_constraints()
+
 
         indexes = self.get_indexes()
         for name in indexes['name']:
@@ -2588,12 +2590,17 @@ class NeoAccess(NeoAccessCore):
 
 
 
-    def create_constraint(self, label: str, key: str, name=None) -> bool:
+    def create_constraint(self, label :str, key :str, name=None) -> bool:
         """
         Create a uniqueness constraint for a node property in the graph,
-        unless a constraint with the standard name of the form `{label}.{key}.UNIQUE` is already present
-        Note: it also creates an index, and cannot be applied if an index already exists.
-        EXAMPLE: create_constraint("patient", "patient_id")
+        optionally with the specified name (by default `{label}.{key}.UNIQUE`),
+        and also create an index for the specified label and property
+
+        The constraint creation will not take place, and False will be returned,
+        if a constraint by the same name already exists,
+        or if an index for the specified label and property already exists.
+
+        EXAMPLE: create_constraint(label="patient", key="patient_id")
 
         :param label:   A string with the node label to which the constraint is to be applied
         :param key:     A string with the key (property) name to which the constraint is to be applied
@@ -2602,14 +2609,14 @@ class NeoAccess(NeoAccessCore):
                             EXAMPLE: "patient.patient_id.UNIQUE"
         :return:        True if a new constraint was created, or False otherwise
         """
-        #TODO: possibly consider other types of constraints
+        #TODO: offer the option to pass multiple keys
 
         existing_constraints = self.get_constraints()
-        # Constraint is created if not already exists.
+        # Constraint is created if not already exists;
         # a standard name for a constraint is assigned: `{label}.{key}.UNIQUE` if name was not provided
         cname = (name if name else f"{label}.{key}.UNIQUE")
         if cname in list(existing_constraints['name']):
-            print("--- ALREADY EXISTS")
+            #print("--- ALREADY EXISTS")
             return False
 
         try:
@@ -2628,7 +2635,8 @@ class NeoAccess(NeoAccessCore):
 
     def drop_constraint(self, name: str) -> bool:
         """
-        Eliminate the constraint with the specified name
+        Eliminate the constraint with the specified name.
+        Its associated index is also deleted.
 
         :param name:    Name of the constraint to eliminate
         :return:        True if successful or False otherwise (for example, if the constraint doesn't exist)

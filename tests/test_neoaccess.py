@@ -26,7 +26,7 @@ import neo4j.time
 @pytest.fixture(scope="module")
 def db():
     # MAKE SURE TO FIRST SET THE ENVIRONMENT VARIABLES, prior to run the pytests in this file!
-    neo_obj = neo_access.NeoAccess(debug=False, apoc=True)     # Change the debug option to True if desired
+    neo_obj = neo_access.NeoAccess(debug=False, apoc=False)     # Change the debug option to True if desired
     yield neo_obj
 
 
@@ -1911,22 +1911,44 @@ def test_drop_index(db):
     db.empty_dbase(drop_indexes=True, drop_constraints=True)
 
     db.create_index("car", "color")
-    db.create_index("car", "make")
+    db.create_index("car", "make")      # This creates an index named "car.make"
     db.create_index("vehicle", "year")
     db.create_index("vehicle", "factory")
+    db.create_constraint("vehicle", "vid")   # Indirectly creates an index named "vehicle.vid.UNIQUE"
 
     index_df = db.get_indexes()
-    assert len(index_df) == 4
+    assert len(index_df) == 5   # The constraint automatically created an index
 
     status = db.drop_index("car.make")
     assert status == True
     index_df = db.get_indexes()
-    assert len(index_df) == 3
+    assert len(index_df) == 4           # 4 remaining indices
 
-    status = db.drop_index("car.make")  # Attempt to take out an index that is not present
+    status = db.drop_index("car.make")  # Attempt to take out an index that is no longer present
     assert status == False
     index_df = db.get_indexes()
-    assert len(index_df) == 3
+    assert len(index_df) == 4
+
+    status = db.drop_index("I_dont_exist")  # Non-existing index
+    assert status == False
+    index_df = db.get_indexes()
+    assert len(index_df) == 4
+
+    status = db.drop_index("vehicle.year")
+    assert status == True
+    index_df = db.get_indexes()
+    assert len(index_df) == 3       # 3 remaining indices
+
+    status = db.drop_index("vehicle.vid.UNIQUE")  # Cannot drop this index, because it's attached to a constraint
+    assert status == False
+    index_df = db.get_indexes()
+    assert len(index_df) == 3       # Still 3 remaining indices
+
+    status = db.drop_constraint("vehicle.vid.UNIQUE")
+    assert status == True
+    index_df = db.get_indexes()
+    assert len(index_df) == 2       # Removing the constraint also zapped its index
+
 
 
 def test_drop_all_indexes(db):
@@ -2071,15 +2093,24 @@ def test_drop_constraint(db):
 
 def test_drop_all_constraints(db):
     db.empty_dbase(drop_indexes=True, drop_constraints=True)
+    result = db.get_constraints()
+    assert len(result) == 0
 
-    db.create_constraint("patient", "patient_id", name="constraint1")
-    db.create_constraint("client", "client_id")
+    db.create_constraint(label="patient", key="patient_id", name="constraint1")
+    result = db.get_constraints()
+    assert len(result) == 1
 
+    db.drop_all_constraints()
+    result = db.get_constraints()
+    assert len(result) == 0
+
+
+    db.create_constraint(label="patient", key="patient_id", name="constraint1")
+    db.create_constraint(label="client", key="client_id")
     result = db.get_constraints()
     assert len(result) == 2
 
     db.drop_all_constraints()
-
     result = db.get_constraints()
     assert len(result) == 0
 
