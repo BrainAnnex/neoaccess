@@ -2589,27 +2589,23 @@ class NeoAccess(NeoAccessCore):
 
 
 
-    def create_constraint(self, label: str, key: str, type="UNIQUE", name=None) -> bool:
+    def create_constraint(self, label :str, key :str, name=None) -> bool:
         """
         Create a uniqueness constraint for a node property in the graph,
-        unless a constraint with the standard name of the form `{label}.{key}.{type}` is already present
+        unless a constraint with the standard name of the form `{label}.{key}.UNIQUE` is already present
         Note: it also creates an index, and cannot be applied if an index already exists.
         EXAMPLE: create_constraint("patient", "patient_id")
 
         :param label:   A string with the node label to which the constraint is to be applied
         :param key:     A string with the key (property) name to which the constraint is to be applied
-        :param type:    For now, the default "UNIQUE" is the only allowed option
         :param name:    Optional name to give to the new constraint; if not provided, a
-                            standard name of the form `{label}.{key}.{type}` is used.  EXAMPLE: "patient.patient_id.UNIQUE"
+                            standard name of the form `{label}.{key}.UNIQUE` is used.  EXAMPLE: "patient.patient_id.UNIQUE"
         :return:        True if a new constraint was created, or False otherwise
         """
-        assert type == "UNIQUE"
-        #TODO: drop this argument
-
         existing_constraints = self.get_constraints()
         # Constraint is created if not already exists.
-        # a standard name for a constraint is assigned: `{label}.{key}.{type}` if name was not provided
-        cname = (name if name else f"{label}.{key}.{type}")
+        # a standard name for a constraint is assigned: `{label}.{key}.UNIQUE` if name was not provided
+        cname = (name if name else f"{label}.{key}.UNIQUE")
         if cname in list(existing_constraints['name']):
             return False
 
