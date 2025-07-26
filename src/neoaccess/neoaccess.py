@@ -97,7 +97,7 @@ class NeoAccessCore:
                                 DEFAULT: read from NEO4J_USER and NEO4J_PASSWORD environmental variables
         :param apoc:        Flag indicating whether apoc library is used on Neo4j database to connect to
                                 Notes: APOC, if used, must also be enabled on the database.
-
+				The only method currently requiring APOC is export_dbase_json()
         :param debug:       Flag indicating whether a debug mode is to be used :
                                 if True, all the Cypher queries, and some additional info, will get printed
         :param autoconnect  Flag indicating whether the class should establish connection to database at initialization
@@ -837,10 +837,10 @@ class NeoAccess(NeoAccessCore):
     def count_nodes(self) -> int:
         """
         Compute and return the total number of nodes in the database
-        TODO: test
 
         :return:    The total number of nodes in the database
         """
+	# TODO: test
         q = "MATCH (n) RETURN COUNT(n) AS number_nodes"
 
         return self.query(q, single_cell="number_nodes")
