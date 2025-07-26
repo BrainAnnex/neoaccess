@@ -654,12 +654,13 @@ class NeoAccessCore:
 
 class NeoAccess(NeoAccessCore):
     """
-    IMPORTANT : for versions 4.4 of the Neo4j database
+    IMPORTANT : for versions 5.26 of the Neo4j database
 
     High-level class to interface with the Neo4j graph database from Python.
 
-    Tested on version 4.4 of Neo4j Community version, but should work with other 4.x versions, too.
-    NOT tested on any other major version of Neo4j; in particular, NOT tested with version 5
+    Tested on version 5.26 of Neo4j Community version, but should work with other 5.x versions,
+    especially later ones.
+    NOT tested on any other major version of Neo4j
 
     This class is a layer above its parent class "NeoAccessCore",
         and it provides a higher-level functionality for common database operations,
