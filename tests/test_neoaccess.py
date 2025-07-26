@@ -1808,7 +1808,7 @@ def test_get_labels(db):
     Create multiple new nodes, and then retrieve all the labels present in the database
     """
 
-    db.empty_dbase(drop_indexes=True, drop_constraints=True)
+    db.empty_dbase(keep_labels=None)
 
     labels = db.get_labels()
     assert labels == []
@@ -1816,22 +1816,25 @@ def test_get_labels(db):
     # Create a series of new nodes with different labels
     # and then check the cumulative list of labels added to the dbase thus far
 
-    db.create_node("mercury", {'position': 1})
+    db.create_node(labels="mercury", properties={'position': 1})
     labels = db.get_labels()
     assert labels == ["mercury"]
 
-    db.create_node("venus", {'radius': 1234.5})
+    db.create_node(labels="venus", properties={'radius': 1234.5})
     labels = db.get_labels()
-    assert compare_unordered_lists(labels , ["mercury", "venus"])
-
-    db.create_node("earth", {'mass': 9999.9 , 'radius': 1234.5})
+    assert compare_unordered_lists(labels , ["mercury", "venus"]) # The expected list may be
+                                                                  # specified in any order
+    db.create_node(labels="earth", properties={'mass': 9999.9 , 'radius': 1234.5})
     labels = db.get_labels()
-    assert compare_unordered_lists(labels , ["mercury", "earth", "venus"]) # The expected list may be
-                                                                            # specified in any order
+    assert compare_unordered_lists(labels , ["mercury", "earth", "venus"])
 
-    db.create_node("mars", {})
+    db.create_node(labels="mars", properties={})
     labels = db.get_labels()
     assert compare_unordered_lists(labels , ["mars", "earth", "mercury","venus"])
+
+    db.create_node(labels=["jupiter", "planet"], properties={})
+    labels = db.get_labels()
+    assert compare_unordered_lists(labels , ["mars", "earth", "mercury","venus", "jupiter", "planet"])
 
 
 
@@ -1954,14 +1957,14 @@ def test_get_constraints(db):
     result = db.get_constraints()
     assert len(result) == 1
     expected_list = ["name", "description", "details"]
-    compare_unordered_lists(list(result.columns), expected_list)
+    assert compare_unordered_lists(list(result.columns), expected_list)
     assert result.iloc[0]["name"] == "my_first_constraint"
 
     db.query("CREATE CONSTRAINT unique_model ON (n:car) ASSERT n.model IS UNIQUE")
     result = db.get_constraints()
     assert len(result) == 2
     expected_list = ["name", "description", "details"]
-    compare_unordered_lists(list(result.columns), expected_list)
+    assert compare_unordered_lists(list(result.columns), expected_list)
     assert result.iloc[1]["name"] == "unique_model"
 
 
@@ -1975,7 +1978,7 @@ def test_create_constraint(db):
     result = db.get_constraints()
     assert len(result) == 1
     expected_list = ["name", "description", "details"]
-    compare_unordered_lists(list(result.columns), expected_list)
+    assert compare_unordered_lists(list(result.columns), expected_list)
     assert result.iloc[0]["name"] == "my_first_constraint"
 
     status = db.create_constraint("car", "registration_number")
@@ -1984,12 +1987,15 @@ def test_create_constraint(db):
     result = db.get_constraints()
     assert len(result) == 2
     expected_list = ["name", "description", "details"]
-    compare_unordered_lists(list(result.columns), expected_list)
+    assert compare_unordered_lists(list(result.columns), expected_list)
     cname0 = result.iloc[0]["name"]
     cname1 = result.iloc[1]["name"]
+    # The order isn't guaranteeed
     assert cname0 == "car.registration_number.UNIQUE" or cname1 == "car.registration_number.UNIQUE"
 
-    status = db.create_constraint("car", "registration_number")   # Attempt to create a constraint that already was in place
+
+    # Attempt to create a constraint that already was in place
+    status = db.create_constraint("car", "registration_number")
     assert status == False
     result = db.get_constraints()
     assert len(result) == 2

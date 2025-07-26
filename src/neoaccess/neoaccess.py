@@ -837,10 +837,10 @@ class NeoAccess(NeoAccessCore):
     def count_nodes(self) -> int:
         """
         Compute and return the total number of nodes in the database
-        TODO: test
 
         :return:    The total number of nodes in the database
         """
+        #  TODO: test
         q = "MATCH (n) RETURN COUNT(n) AS number_nodes"
 
         return self.query(q, single_cell="number_nodes")
@@ -2270,6 +2270,7 @@ class NeoAccess(NeoAccessCore):
 
         :return:                The total number of inbound and/or outbound relationships to the given node(s)
         """
+        #TODO: change default of `rel_dir` to "BOTH"
         match_structure = CypherUtils.process_match_structure(match, caller_method="count_links")
 
         if self.debug:
@@ -2413,7 +2414,7 @@ class NeoAccess(NeoAccessCore):
 
         :return:    A list of strings
         """
-        #TODO: test when there are nodes that have multiple labels
+        # CAUTION: In Neo4j v.5, CALL db.labels() returns all known labels, not just currently in-use labels!
         results = self.query("call db.labels() yield label return label")
         return [x['label'] for x in results]
 
@@ -2463,6 +2464,7 @@ class NeoAccess(NeoAccessCore):
         :return:        A (possibly-empty) Pandas dataframe
         """
 
+        # NOTE: In 5.x, CALL db.indexes() is deprecated in favor of the more powerful SHOW INDEXES.
         q = f"""
           CALL db.indexes() 
           YIELD name, labelsOrTypes, properties, type, uniqueness
@@ -2593,6 +2595,7 @@ class NeoAccess(NeoAccessCore):
         unless a constraint with the standard name of the form `{label}.{key}.{type}` is already present
         Note: it also creates an index, and cannot be applied if an index already exists.
         EXAMPLE: create_constraint("patient", "patient_id")
+
         :param label:   A string with the node label to which the constraint is to be applied
         :param key:     A string with the key (property) name to which the constraint is to be applied
         :param type:    For now, the default "UNIQUE" is the only allowed option
@@ -2601,17 +2604,17 @@ class NeoAccess(NeoAccessCore):
         :return:        True if a new constraint was created, or False otherwise
         """
         assert type == "UNIQUE"
-        #TODO: consider other types of constraints
+        #TODO: drop this argument
 
         existing_constraints = self.get_constraints()
-        # constraint is created if not already exists.
+        # Constraint is created if not already exists.
         # a standard name for a constraint is assigned: `{label}.{key}.{type}` if name was not provided
-        cname = (name if name else f"`{label}.{key}.{type}`")
+        cname = (name if name else f"{label}.{key}.{type}")
         if cname in list(existing_constraints['name']):
             return False
 
         try:
-            q = f'CREATE CONSTRAINT {cname} ON (s:`{label}`) ASSERT s.`{key}` IS UNIQUE'
+            q = f'CREATE CONSTRAINT `{cname}` ON (s:`{label}`) ASSERT s.`{key}` IS UNIQUE'
             self.query(q)
             # Note: creation of a constraint will crash if another constraint, or index, already exists
             #           for the specified label and key
